@@ -95,32 +95,74 @@ async fn record_system_failure_and_decide_impl<R: tauri::Runtime>(
     let circuit_failure_threshold = Some(circuit_before.failure_threshold);
 
     if !is_count_tokens {
-        let change = provider_router::record_failure_and_emit_transition(
-            provider_router::RecordCircuitArgs::from_state(
-                ctx.state,
-                ctx.trace_id.as_str(),
-                ctx.cli_key.as_str(),
-                provider_id,
-                provider_name_base.as_str(),
-                provider_base_url_base.as_str(),
-                now_unix,
-            )
-            .with_provider_health_neutral(ctx.provider_health_neutral)
-            // Attribute the circuit-open notice to this failure (D3): always
-            // pass the effective first-byte timeout; the notice builder only
-            // uses it when the trigger code is GW_UPSTREAM_TIMEOUT.
-            .with_trigger(Some(error_code), Some(ctx.upstream_first_byte_timeout_secs)),
-        );
-        *circuit_snapshot = change.after.clone();
-        circuit_state_before = Some(change.before.state.as_str());
-        circuit_state_after = Some(change.after.state.as_str());
-        circuit_failure_count = Some(change.after.failure_count);
-
-        let recorded_decision = decision;
-        decision =
-            system_failure_decision_after_circuit_record(decision, false, Some(change.after.state));
-        outcome =
-            system_failure_outcome_after_decision_override(outcome, recorded_decision, decision);
+        let model_scoped = ctx
+            .requested_model
+            .as_deref()
+            .filter(|model| !model.is_empty());
+        if let Some(model) = model_scoped {
+            let change = if ctx.provider_health_neutral {
+                let snapshot = ctx
+                    .state
+                    .circuit
+                    .should_allow_model(provider_id, model, now_unix)
+                    .after;
+                circuit_breaker::CircuitChange {
+                    before: snapshot.clone(),
+                    after: snapshot,
+                    transition: None,
+                }
+            } else {
+                ctx.state
+                    .circuit
+                    .record_failure_model(provider_id, model, now_unix)
+            };
+            *circuit_snapshot = change.after.clone();
+            circuit_state_before = Some(change.before.state.as_str());
+            circuit_state_after = Some(change.after.state.as_str());
+            circuit_failure_count = Some(change.after.failure_count);
+            let recorded_decision = decision;
+            decision = system_failure_decision_after_circuit_record(
+                decision,
+                false,
+                (!ctx.provider_health_neutral
+                    && change.after.state == circuit_breaker::CircuitState::Open)
+                    .then_some(change.after.state),
+            );
+            outcome = system_failure_outcome_after_decision_override(
+                outcome,
+                recorded_decision,
+                decision,
+            );
+        } else {
+            let change = provider_router::record_failure_and_emit_transition(
+                provider_router::RecordCircuitArgs::from_state(
+                    ctx.state,
+                    ctx.trace_id.as_str(),
+                    ctx.cli_key.as_str(),
+                    provider_id,
+                    provider_name_base.as_str(),
+                    provider_base_url_base.as_str(),
+                    now_unix,
+                )
+                .with_provider_health_neutral(ctx.provider_health_neutral)
+                .with_trigger(Some(error_code), Some(ctx.upstream_first_byte_timeout_secs)),
+            );
+            *circuit_snapshot = change.after.clone();
+            circuit_state_before = Some(change.before.state.as_str());
+            circuit_state_after = Some(change.after.state.as_str());
+            circuit_failure_count = Some(change.after.failure_count);
+            let recorded_decision = decision;
+            decision = system_failure_decision_after_circuit_record(
+                decision,
+                false,
+                Some(change.after.state),
+            );
+            outcome = system_failure_outcome_after_decision_override(
+                outcome,
+                recorded_decision,
+                decision,
+            );
+        }
     }
 
     attempts.push(FailoverAttempt {
@@ -177,17 +219,33 @@ async fn record_system_failure_and_decide_impl<R: tauri::Runtime>(
             )
         {
             let now_unix = now_unix_seconds() as i64;
-            let snap = provider_router::trigger_cooldown(
-                ctx.state.circuit.as_ref(),
-                provider_id,
-                now_unix,
-                provider_cooldown_secs,
-                ctx.provider_health_neutral,
-            );
+            let snap = if let Some(model) = ctx
+                .requested_model
+                .as_deref()
+                .filter(|model| !model.is_empty())
+            {
+                if ctx.provider_health_neutral {
+                    circuit_snapshot.clone()
+                } else {
+                    ctx.state.circuit.trigger_cooldown_model(
+                        provider_id,
+                        model,
+                        now_unix,
+                        provider_cooldown_secs,
+                    )
+                }
+            } else {
+                provider_router::trigger_cooldown(
+                    ctx.state.circuit.as_ref(),
+                    provider_id,
+                    now_unix,
+                    provider_cooldown_secs,
+                    ctx.provider_health_neutral,
+                )
+            };
             *circuit_snapshot = snap;
         }
     }
-
     match decision {
         FailoverDecision::RetrySameProvider => LoopControl::ContinueRetry,
         FailoverDecision::SwitchProvider => {

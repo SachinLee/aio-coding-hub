@@ -62,6 +62,7 @@ pub(super) struct ProxyContext<R: tauri::Runtime = tauri::Wry> {
     // -- immutable request metadata (set at construction) --
     pub(super) state: GatewayAppState<R>,
     pub(super) cli_key: String,
+    pub(super) client_identity: String,
     pub(super) forwarded_path: String,
     pub(super) req_method: Method,
     pub(super) method_hint: String,
@@ -126,6 +127,7 @@ impl<R: tauri::Runtime> ProxyContext<R> {
         RequestContextParts {
             state: self.state,
             cli_key: self.cli_key,
+            client_identity: self.client_identity,
             forwarded_path: self.forwarded_path,
             observe_request: self.observe_request,
             req_method: self.req_method,

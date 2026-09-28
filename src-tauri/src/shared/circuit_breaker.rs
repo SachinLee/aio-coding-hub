@@ -18,6 +18,22 @@ use std::sync::{
     Arc, Mutex,
 };
 use tokio::sync::mpsc::error::TrySendError;
+enum ModelCircuitOp {
+    Allow,
+    Failure,
+    Success,
+    Cooldown(i64),
+}
+
+impl CircuitCheck {
+    fn into_change(self) -> CircuitChange {
+        CircuitChange {
+            before: self.after.clone(),
+            after: self.after,
+            transition: self.transition,
+        }
+    }
+}
 
 const MAX_PERSIST_BACKLOG: usize = 512;
 
@@ -110,6 +126,7 @@ impl CircuitBreaker {
         Self {
             config: std::sync::Mutex::new(config),
             health: std::sync::Mutex::new(map),
+            model_health: std::sync::Mutex::new(HashMap::new()),
             persist_tx,
             persist_backlog: Arc::new(Mutex::new(HashMap::new())),
             persist_backlog_flush_scheduled: Arc::new(AtomicBool::new(false)),
@@ -497,6 +514,10 @@ impl CircuitBreaker {
             return Self::closed_snapshot(&cfg);
         }
 
+        self.model_health
+            .lock_or_recover()
+            .retain(|(id, _), _| *id != provider_id);
+
         let upsert = {
             let mut guard = self.health.lock_or_recover();
             let Some(mut entry) = guard.remove(&provider_id) else {
@@ -515,6 +536,163 @@ impl CircuitBreaker {
 
         self.try_persist(upsert);
         Self::closed_snapshot(&cfg)
+    }
+
+    pub fn should_allow_model(&self, provider_id: i64, model: &str, now_unix: i64) -> CircuitCheck {
+        self.model_check(provider_id, model, now_unix, ModelCircuitOp::Allow)
+    }
+
+    pub fn record_failure_model(
+        &self,
+        provider_id: i64,
+        model: &str,
+        now_unix: i64,
+    ) -> CircuitChange {
+        self.model_check(provider_id, model, now_unix, ModelCircuitOp::Failure)
+            .into_change()
+    }
+
+    pub fn record_success_model(
+        &self,
+        provider_id: i64,
+        model: &str,
+        now_unix: i64,
+    ) -> CircuitChange {
+        self.model_check(provider_id, model, now_unix, ModelCircuitOp::Success)
+            .into_change()
+    }
+
+    pub fn trigger_cooldown_model(
+        &self,
+        provider_id: i64,
+        model: &str,
+        now_unix: i64,
+        cooldown_secs: i64,
+    ) -> CircuitSnapshot {
+        self.model_check(
+            provider_id,
+            model,
+            now_unix,
+            ModelCircuitOp::Cooldown(cooldown_secs),
+        )
+        .after
+    }
+
+    fn model_check(
+        &self,
+        provider_id: i64,
+        model: &str,
+        now_unix: i64,
+        op: ModelCircuitOp,
+    ) -> CircuitCheck {
+        let cfg = self.read_config();
+        if provider_id <= 0 || model.is_empty() {
+            return CircuitCheck {
+                allow: true,
+                after: Self::closed_snapshot(&cfg),
+                transition: None,
+            };
+        }
+        let key = (provider_id, model.to_string());
+        let mut guard = self.model_health.lock_or_recover();
+        let entry = guard
+            .entry(key.clone())
+            .or_insert_with(|| ProviderHealth::closed(provider_id, now_unix).1);
+        let now_u64 = now_unix as u64;
+        let mut transition = None;
+        match op {
+            ModelCircuitOp::Allow => {}
+            ModelCircuitOp::Failure => {
+                if entry.state != CircuitState::Open {
+                    entry.failure_timestamps.push(now_u64);
+                    entry.prune_old_failures(now_u64);
+                    entry.updated_at = now_unix;
+                    if entry.state == CircuitState::HalfOpen
+                        || entry.effective_failure_count(now_u64) >= cfg.failure_threshold
+                    {
+                        let prev = entry.state;
+                        entry.state = CircuitState::Open;
+                        entry.half_open_success_count = 0;
+                        entry.open_until = Some(now_unix.saturating_add(cfg.open_duration_secs));
+                        transition = Some(CircuitTransition {
+                            prev_state: prev,
+                            next_state: entry.state,
+                            reason: "MODEL_FAILURE_THRESHOLD_REACHED",
+                            snapshot: Self::snapshot_from_health(&cfg, entry, now_u64),
+                        });
+                    }
+                }
+            }
+            ModelCircuitOp::Success => {
+                if entry.state == CircuitState::HalfOpen {
+                    entry.half_open_success_count = entry.half_open_success_count.saturating_add(1);
+                    if entry.half_open_success_count >= HALF_OPEN_SUCCESS_REQUIRED {
+                        let prev = entry.state;
+                        entry.state = CircuitState::Closed;
+                        entry.failure_timestamps.clear();
+                        entry.half_open_success_count = 0;
+                        entry.open_until = None;
+                        entry.cooldown_until = None;
+                        transition = Some(CircuitTransition {
+                            prev_state: prev,
+                            next_state: entry.state,
+                            reason: "MODEL_HALF_OPEN_SUCCESS",
+                            snapshot: Self::snapshot_from_health(&cfg, entry, now_u64),
+                        });
+                    }
+                } else if entry.state == CircuitState::Closed {
+                    entry.failure_timestamps.clear();
+                    entry.cooldown_until = None;
+                }
+                entry.updated_at = now_unix;
+            }
+            ModelCircuitOp::Cooldown(secs) if secs > 0 && entry.state != CircuitState::Open => {
+                let next_until = now_unix.saturating_add(secs);
+                entry.cooldown_until = Some(match entry.cooldown_until {
+                    Some(existing) => existing.max(next_until),
+                    None => next_until,
+                });
+                entry.updated_at = now_unix;
+            }
+            ModelCircuitOp::Cooldown(_) => {}
+        }
+        if let Some(until) = entry.cooldown_until {
+            if now_unix >= until {
+                entry.cooldown_until = None;
+            }
+        }
+        if entry.state == CircuitState::Open
+            && entry
+                .open_until
+                .map(|until| now_unix >= until)
+                .unwrap_or(true)
+        {
+            let prev = entry.state;
+            entry.state = CircuitState::HalfOpen;
+            entry.half_open_success_count = 0;
+            entry.open_until = None;
+            entry.updated_at = now_unix;
+            transition = Some(CircuitTransition {
+                prev_state: prev,
+                next_state: entry.state,
+                reason: "MODEL_OPEN_EXPIRED",
+                snapshot: Self::snapshot_from_health(&cfg, entry, now_u64),
+            });
+        }
+        let after = Self::snapshot_from_health(&cfg, entry, now_u64);
+        let cooldown_active = entry
+            .cooldown_until
+            .map(|until| now_unix < until)
+            .unwrap_or(false);
+        let allow = entry.state != CircuitState::Open && !cooldown_active;
+        if Self::is_inert_closed_health(entry) {
+            guard.remove(&key);
+        }
+        CircuitCheck {
+            allow,
+            after,
+            transition,
+        }
     }
 
     fn try_persist(&self, item: CircuitPersistedState) {

@@ -3,7 +3,7 @@
 use crate::shared::mutex_ext::MutexExt;
 use crate::{circuit_breaker, db, request_logs, session_manager};
 use std::sync::{Arc, Mutex};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 
 use super::active_requests::{ActiveRequestFinishReason, ActiveRequestRegistry};
 use super::background_tasks::GatewayBackgroundTasks;
@@ -95,7 +95,8 @@ pub(crate) type GatewayRuntimeHandles = (
     tauri::async_runtime::JoinHandle<()>,
     tauri::async_runtime::JoinHandle<()>,
     tauri::async_runtime::JoinHandle<()>,
-    tokio::sync::watch::Sender<bool>,
+    watch::Sender<bool>,
+    tauri::async_runtime::JoinHandle<()>,
     tauri::async_runtime::JoinHandle<()>,
 );
 
@@ -241,8 +242,13 @@ impl GatewayRuntime {
     pub(super) fn into_handles(self) -> GatewayRuntimeHandles {
         self.active_requests
             .finish_all(ActiveRequestFinishReason::GatewayStopped);
-        let (log_task, circuit_task, oauth_refresh_shutdown, oauth_refresh_task) =
-            self.background_tasks.into_handles();
+        let (
+            log_task,
+            circuit_task,
+            oauth_refresh_shutdown,
+            oauth_refresh_task,
+            model_catalog_task,
+        ) = self.background_tasks.into_handles();
         (
             self.shutdown,
             self.task,
@@ -250,6 +256,7 @@ impl GatewayRuntime {
             circuit_task,
             oauth_refresh_shutdown,
             oauth_refresh_task,
+            model_catalog_task,
         )
     }
 

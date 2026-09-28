@@ -7,7 +7,7 @@
 use super::abort_guard::RequestAbortGuard;
 use super::logging::enqueue_request_log_placeholder;
 use super::request_context::RequestContext;
-use super::{is_claude_count_tokens_request, is_codex_model_discovery_request};
+use super::{is_claude_count_tokens_request, is_model_discovery_request};
 
 use crate::gateway::active_requests::ActiveRequestStart;
 use crate::gateway::events::{emit_gateway_debug_log_lazy, emit_request_start_event};
@@ -20,7 +20,7 @@ use crate::gateway::util::{
 use axum::{
     body::{Body, Bytes},
     http::Request,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -63,6 +63,7 @@ fn build_in_progress_request_log_args<R: tauri::Runtime>(
     Some(super::RequestLogEnqueueArgs {
         trace_id: ctx.trace_id.to_string(),
         cli_key: ctx.cli_key.to_string(),
+        client_identity: ctx.client_identity.clone(),
         session_id: ctx.session_id.as_deref().map(str::to_string),
         method: ctx.method_hint.to_string(),
         path: ctx.forwarded_path.to_string(),
@@ -120,6 +121,7 @@ fn abort_guard_from_proxy_context<R: tauri::Runtime>(
         ctx.state.active_requests.clone(),
         ctx.trace_id.clone(),
         ctx.cli_key.clone(),
+        ctx.client_identity.clone(),
         ctx.method_hint.clone(),
         ctx.forwarded_path.clone(),
         ctx.observe_request,
@@ -133,6 +135,78 @@ fn abort_guard_from_proxy_context<R: tauri::Runtime>(
     )
 }
 
+async fn respond_model_union<R: tauri::Runtime>(
+    state: &crate::gateway::runtime::GatewayAppState<R>,
+    cli_key: &str,
+    forwarded_path: &str,
+    trace_id: &str,
+) -> Response {
+    let db = state.db.clone();
+    let cli_key_owned = cli_key.to_string();
+    let catalog = crate::blocking::run("model_catalog_union", move || {
+        crate::app::model_catalog_service::list_blocking(&db, &cli_key_owned)
+    })
+    .await
+    .unwrap_or_else(|_| crate::app::model_catalog_service::ModelCatalogResult {
+        cli_key: cli_key.to_string(),
+        default_context_window: crate::infra::model_catalog_metadata::DEFAULT_CONTEXT_WINDOW,
+        default_reasoning_effort: crate::infra::model_catalog_metadata::DEFAULT_REASONING_EFFORT
+            .to_string(),
+        supported_reasoning_efforts:
+            crate::infra::model_catalog_metadata::SUPPORTED_REASONING_EFFORTS
+                .iter()
+                .map(|value| (*value).to_string())
+                .collect(),
+        items: Vec::new(),
+    });
+    let body = model_union_body(cli_key, forwarded_path, catalog);
+    let mut response = (
+        axum::http::StatusCode::OK,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "application/json; charset=utf-8",
+        )],
+        axum::Json(body),
+    )
+        .into_response();
+    if let Ok(value) = axum::http::HeaderValue::from_str(trace_id) {
+        response.headers_mut().insert("x-trace-id", value);
+    }
+    response
+}
+
+fn model_union_body(
+    cli_key: &str,
+    path: &str,
+    catalog: crate::app::model_catalog_service::ModelCatalogResult,
+) -> serde_json::Value {
+    let supported_reasoning_efforts = catalog.supported_reasoning_efforts;
+    // Only user-enabled catalog entries are exposed; disabled models stay
+    // manageable in the UI but must not be returned to clients.
+    let items = catalog.items.into_iter().filter(|item| item.enabled);
+    if cli_key == "codex" && path.trim_end_matches('/') == "/models" {
+        serde_json::json!({
+            "models": items.map(|item| serde_json::json!({
+                "slug": item.model_id.clone(),
+                "display_name": item.model_id,
+                "context_window": item.context_window,
+                "default_reasoning_effort": item.reasoning_effort,
+                "supported_reasoning_efforts": supported_reasoning_efforts.clone(),
+            })).collect::<Vec<_>>()
+        })
+    } else {
+        serde_json::json!({
+            "object": "list",
+            "data": items.map(|item| serde_json::json!({
+                "id": item.model_id,
+                "object": "model",
+                "context_window": item.context_window,
+                "default_reasoning_effort": item.reasoning_effort,
+                "supported_reasoning_efforts": supported_reasoning_efforts.clone(),
+            })).collect::<Vec<_>>()
+        })
+    }
+}
 // ---------------------------------------------------------------------------
 // Main entry point: middleware chain orchestrator
 // ---------------------------------------------------------------------------
@@ -155,8 +229,10 @@ where
     let method_hint = method.to_string();
     let query = req.uri().query().map(str::to_string);
     let is_claude_count_tokens = is_claude_count_tokens_request(&cli_key, &forwarded_path);
-    let is_codex_model_discovery =
-        is_codex_model_discovery_request(&cli_key, &method, &forwarded_path);
+    let is_model_discovery = is_model_discovery_request(&cli_key, &method, &forwarded_path);
+    if is_model_discovery {
+        return respond_model_union(&state, &cli_key, &forwarded_path, &trace_id).await;
+    }
 
     let (headers, body) = {
         let (parts, b) = req.into_parts();
@@ -169,6 +245,9 @@ where
     let ctx = ProxyContext {
         state,
         cli_key,
+        client_identity: crate::gateway::client_identity::classify_request_client(&headers)
+            .key()
+            .to_string(),
         forwarded_path,
         req_method: method,
         method_hint,
@@ -178,7 +257,7 @@ where
         created_at_ms,
         created_at,
         is_claude_count_tokens,
-        is_codex_model_discovery,
+        is_codex_model_discovery: is_model_discovery,
         request_body: Some(body),
         headers,
         body_bytes: Bytes::new(),
@@ -187,7 +266,7 @@ where
         observe_request: false,
         strip_request_content_encoding_seed: false,
         special_settings: new_special_settings(),
-        provider_health_neutral: is_codex_model_discovery,
+        provider_health_neutral: is_model_discovery,
         requested_model: None,
         requested_model_location: None,
         is_compact_request: false,
@@ -450,6 +529,7 @@ mod tests {
                 active_requests.clone(),
             ),
             cli_key: "claude".to_string(),
+            client_identity: "unknown".to_string(),
             forwarded_path: "/v1/messages".to_string(),
             req_method: Method::POST,
             method_hint: "POST".to_string(),
@@ -513,6 +593,7 @@ mod tests {
                 active_requests.clone(),
             ),
             cli_key: "claude".to_string(),
+            client_identity: "unknown".to_string(),
             forwarded_path: "/v1/messages".to_string(),
             req_method: Method::POST,
             method_hint: "POST".to_string(),
@@ -567,6 +648,7 @@ mod tests {
         middleware::ProxyContext {
             state: active_request_test_state(app, db, log_tx, active_requests),
             cli_key: "claude".to_string(),
+            client_identity: "unknown".to_string(),
             forwarded_path: "/v1/messages".to_string(),
             req_method: Method::POST,
             method_hint: "POST".to_string(),
@@ -648,6 +730,7 @@ mod tests {
             crate::gateway::proxy::RequestLogEnqueueArgs::from_proxy_request_end_parts(
                 &ctx.trace_id,
                 &ctx.cli_key,
+                &ctx.client_identity,
                 ctx.session_id.clone(),
                 &ctx.method_hint,
                 &ctx.forwarded_path,

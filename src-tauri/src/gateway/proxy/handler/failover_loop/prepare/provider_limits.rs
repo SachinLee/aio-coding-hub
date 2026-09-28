@@ -770,6 +770,7 @@ INSERT INTO request_logs (
         let state = gateway_test_state(app.handle().clone(), db);
         let provider = provider_with_5h_limit(provider_id);
         let cli_key = "codex".to_string();
+        let client_identity = "unknown".to_string();
         let forwarded_path = "/v1/responses".to_string();
         let method_hint = "POST".to_string();
         let query = None;
@@ -788,6 +789,7 @@ INSERT INTO request_logs (
         let ctx = CommonCtx::from(CommonCtxArgs {
             state: &state,
             cli_key: &cli_key,
+            client_identity: &client_identity,
             forwarded_path: &forwarded_path,
             observe: true,
             method_hint: &method_hint,

@@ -124,6 +124,7 @@ pub(super) async fn handle_thinking_rectifiers_400<R: tauri::Runtime>(
     let CommonCtxOwned {
         state,
         cli_key,
+        client_identity,
         method_hint,
         forwarded_path,
         query,
@@ -197,6 +198,7 @@ pub(super) async fn handle_thinking_rectifiers_400<R: tauri::Runtime>(
                             ),
                             trace_id: trace_id.as_str(),
                             cli_key: cli_key.as_str(),
+                            client_identity: client_identity.as_str(),
                             method: method_hint.as_str(),
                             path: forwarded_path.as_str(),
                             observe: ctx.observe,
@@ -349,41 +351,56 @@ pub(super) async fn handle_thinking_rectifiers_400<R: tauri::Runtime>(
 
         if should_record_circuit_failure && !rectified_applied {
             let now_unix = now_unix_seconds() as i64;
-            let change = provider_router::record_failure_and_emit_transition(
-                provider_router::RecordCircuitArgs::from_state(
-                    state,
-                    trace_id.as_str(),
-                    cli_key.as_str(),
-                    provider_id,
-                    provider_name_base.as_str(),
-                    provider_base_url_base.as_str(),
-                    now_unix,
-                )
-                .with_provider_health_neutral(provider_health_neutral),
-            );
-
+            let change =
+                if let Some(model) = requested_model.as_deref().filter(|model| !model.is_empty()) {
+                    state
+                        .circuit
+                        .record_failure_model(provider_id, model, now_unix)
+                } else {
+                    provider_router::record_failure_and_emit_transition(
+                        provider_router::RecordCircuitArgs::from_state(
+                            state,
+                            trace_id.as_str(),
+                            cli_key.as_str(),
+                            provider_id,
+                            provider_name_base.as_str(),
+                            provider_base_url_base.as_str(),
+                            now_unix,
+                        )
+                        .with_provider_health_neutral(provider_health_neutral),
+                    )
+                };
             *circuit_snapshot = change.after.clone();
             circuit_state_before = Some(change.before.state.as_str());
             circuit_state_after = Some(change.after.state.as_str());
             circuit_failure_count = Some(change.after.failure_count);
-
             if change.after.state == crate::circuit_breaker::CircuitState::Open {
                 decision = FailoverDecision::SwitchProvider;
             }
-
             if provider_cooldown_secs > 0
                 && matches!(
                     decision,
                     FailoverDecision::SwitchProvider | FailoverDecision::Abort
                 )
             {
-                *circuit_snapshot = provider_router::trigger_cooldown(
-                    state.circuit.as_ref(),
-                    provider_id,
-                    now_unix,
-                    provider_cooldown_secs,
-                    provider_health_neutral,
-                );
+                *circuit_snapshot = if let Some(model) =
+                    requested_model.as_deref().filter(|model| !model.is_empty())
+                {
+                    state.circuit.trigger_cooldown_model(
+                        provider_id,
+                        model,
+                        now_unix,
+                        provider_cooldown_secs,
+                    )
+                } else {
+                    provider_router::trigger_cooldown(
+                        state.circuit.as_ref(),
+                        provider_id,
+                        now_unix,
+                        provider_cooldown_secs,
+                        provider_health_neutral,
+                    )
+                };
             }
         }
 
@@ -518,6 +535,7 @@ pub(super) async fn handle_thinking_rectifiers_400<R: tauri::Runtime>(
                         ),
                         trace_id: trace_id.as_str(),
                         cli_key: cli_key.as_str(),
+                        client_identity: client_identity.as_str(),
                         method: method_hint.as_str(),
                         path: forwarded_path.as_str(),
                         observe: ctx.observe,

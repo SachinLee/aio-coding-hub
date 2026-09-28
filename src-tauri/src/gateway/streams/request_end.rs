@@ -202,6 +202,7 @@ pub(super) fn emit_request_event_and_spawn_request_log<R: tauri::Runtime>(
     let (log_args, attempts) = RequestLogEnqueueArgs::from_stream_request_end_parts(
         ctx.trace_id.clone(),
         ctx.cli_key.clone(),
+        ctx.client_identity.clone(),
         ctx.session_id.clone(),
         ctx.method.clone(),
         ctx.path.clone(),
@@ -293,6 +294,7 @@ mod tests {
             sort_mode_id: None,
             trace_id: "trace-stream-end".to_string(),
             cli_key: "codex".to_string(),
+            client_identity: "unknown".to_string(),
             method: "POST".to_string(),
             path: "/v1/responses".to_string(),
             observe: true,

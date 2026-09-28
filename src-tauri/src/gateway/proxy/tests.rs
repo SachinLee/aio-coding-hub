@@ -1,6 +1,6 @@
 use super::{
     build_claude_probe_response_body, compute_observe_request, is_claude_count_tokens_request,
-    is_codex_model_discovery_request, is_internal_forwarded_request, should_observe_request,
+    is_internal_forwarded_request, is_model_discovery_request, should_observe_request,
     should_seed_in_progress_request_log,
 };
 use axum::http::{HeaderMap, Method};
@@ -48,27 +48,19 @@ fn claude_observation_matches_vendor_default_log_contract() {
 }
 
 #[test]
-fn codex_model_discovery_requests_are_not_observed() {
-    for path in ["/v1/models", "/v1/models/", "/models", "/models/"] {
-        assert!(is_codex_model_discovery_request(
-            "codex",
-            &Method::GET,
-            path
-        ));
-        assert!(!should_observe_request("codex", &Method::GET, path));
+fn model_discovery_requests_are_not_observed_for_all_gateway_clis() {
+    for cli_key in ["claude", "codex", "gemini", "grok"] {
+        for path in ["/v1/models", "/v1/models/", "/models", "/models/"] {
+            assert!(is_model_discovery_request(cli_key, &Method::GET, path));
+            assert!(!should_observe_request(cli_key, &Method::GET, path));
+        }
     }
-
-    assert!(!is_codex_model_discovery_request(
+    assert!(!is_model_discovery_request(
         "codex",
         &Method::POST,
         "/v1/models"
     ));
-    assert!(!is_codex_model_discovery_request(
-        "claude",
-        &Method::GET,
-        "/v1/models"
-    ));
-    assert!(!is_codex_model_discovery_request(
+    assert!(!is_model_discovery_request(
         "codex",
         &Method::GET,
         "/v1/models/extra"

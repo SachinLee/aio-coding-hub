@@ -120,6 +120,7 @@ fn respond_warmup_intercept<R: tauri::Runtime>(
             ),
             trace_id: &ctx.trace_id,
             cli_key: &ctx.cli_key,
+            client_identity: &ctx.client_identity,
             method: &ctx.method_hint,
             path: &ctx.forwarded_path,
             observe: ctx.observe_request,

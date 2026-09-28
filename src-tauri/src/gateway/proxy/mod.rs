@@ -45,15 +45,15 @@ fn is_claude_count_tokens_request(cli_key: &str, forwarded_path: &str) -> bool {
 }
 
 fn should_observe_request(cli_key: &str, method: &Method, forwarded_path: &str) -> bool {
-    if is_codex_model_discovery_request(cli_key, method, forwarded_path) {
+    if is_model_discovery_request(cli_key, method, forwarded_path) {
         return false;
     }
 
     cli_key != "claude" || forwarded_path == CLAUDE_LOGGED_MESSAGES_PATH
 }
 
-fn is_codex_model_discovery_request(cli_key: &str, method: &Method, forwarded_path: &str) -> bool {
-    cli_key == "codex"
+fn is_model_discovery_request(cli_key: &str, method: &Method, forwarded_path: &str) -> bool {
+    crate::shared::cli_key::is_supported_cli_key(cli_key)
         && method == Method::GET
         && matches!(
             forwarded_path.trim_end_matches('/'),
@@ -141,6 +141,7 @@ fn build_claude_probe_response_body() -> serde_json::Value {
 pub(super) struct RequestLogEnqueueArgs {
     pub(super) trace_id: String,
     pub(super) cli_key: String,
+    pub(super) client_identity: String,
     pub(super) session_id: Option<String>,
     pub(super) method: String,
     pub(super) path: String,

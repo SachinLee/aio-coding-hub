@@ -122,6 +122,7 @@ pub(super) struct RequestEndContextArgs<'a, R: tauri::Runtime = tauri::Wry> {
     pub(super) deps: RequestEndDeps<'a, R>,
     pub(super) trace_id: &'a str,
     pub(super) cli_key: &'a str,
+    pub(super) client_identity: &'a str,
     pub(super) method: &'a str,
     pub(super) path: &'a str,
     pub(super) observe: bool,
@@ -140,6 +141,7 @@ pub(super) struct RequestEndArgs<'a, R: tauri::Runtime = tauri::Wry> {
     deps: RequestEndDeps<'a, R>,
     trace_id: &'a str,
     cli_key: &'a str,
+    client_identity: &'a str,
     method: &'a str,
     path: &'a str,
     observe: bool,
@@ -168,6 +170,7 @@ impl<'a, R: tauri::Runtime> RequestEndArgs<'a, R> {
             deps: context.deps,
             trace_id: context.trace_id,
             cli_key: context.cli_key,
+            client_identity: context.client_identity,
             method: context.method,
             path: context.path,
             observe: context.observe,
@@ -216,6 +219,7 @@ struct PreparedRequestEnd<'a, R: tauri::Runtime = tauri::Wry> {
 struct RequestEndPayloadParts {
     trace_id: String,
     cli_key: String,
+    client_identity: String,
     session_id: Option<String>,
     method: String,
     path: String,
@@ -541,6 +545,7 @@ fn build_request_end_payload(
     let RequestEndPayloadParts {
         trace_id,
         cli_key,
+        client_identity,
         session_id,
         method,
         path,
@@ -571,6 +576,7 @@ fn build_request_end_payload(
     let log_args = RequestLogEnqueueArgs {
         trace_id,
         cli_key,
+        client_identity,
         session_id,
         method,
         path,
@@ -601,6 +607,7 @@ impl RequestLogEnqueueArgs {
     pub(in crate::gateway) fn from_proxy_request_end_parts(
         trace_id: &str,
         cli_key: &str,
+        client_identity: &str,
         session_id: Option<String>,
         method: &str,
         path: &str,
@@ -626,6 +633,7 @@ impl RequestLogEnqueueArgs {
         build_request_end_payload(RequestEndPayloadParts {
             trace_id: trace_id.to_string(),
             cli_key: cli_key.to_string(),
+            client_identity: client_identity.to_string(),
             session_id,
             method: method.to_string(),
             path: path.to_string(),
@@ -654,6 +662,7 @@ impl RequestLogEnqueueArgs {
     pub(in crate::gateway) fn from_stream_request_end_parts(
         trace_id: String,
         cli_key: String,
+        client_identity: String,
         session_id: Option<String>,
         method: String,
         path: String,
@@ -676,6 +685,7 @@ impl RequestLogEnqueueArgs {
         build_request_end_payload(RequestEndPayloadParts {
             trace_id,
             cli_key,
+            client_identity,
             session_id,
             method,
             path,
@@ -739,6 +749,7 @@ fn prepare_request_end<R: tauri::Runtime>(
     let (log_args, attempts) = RequestLogEnqueueArgs::from_proxy_request_end_parts(
         args.trace_id,
         args.cli_key,
+        args.client_identity,
         args.session_id,
         args.method,
         args.path,
@@ -998,6 +1009,7 @@ mod tests {
                 ),
                 trace_id: "trace-active-end",
                 cli_key: "claude",
+                client_identity: "unknown",
                 method: "POST",
                 path: "/v1/messages",
                 observe: true,
@@ -1025,6 +1037,7 @@ mod tests {
         let (log_args, cloned_attempts) = RequestLogEnqueueArgs::from_proxy_request_end_parts(
             "trace-1",
             "claude",
+            "unknown",
             Some("session-1".to_string()),
             "POST",
             "/v1/messages/count_tokens",
@@ -1062,6 +1075,7 @@ mod tests {
         let (proxy_log, _) = RequestLogEnqueueArgs::from_proxy_request_end_parts(
             "trace-system-proxy",
             "codex",
+            "unknown",
             None,
             "POST",
             "/v1/responses",
@@ -1082,6 +1096,7 @@ mod tests {
         let (stream_log, _) = RequestLogEnqueueArgs::from_stream_request_end_parts(
             "trace-system-stream".to_string(),
             "codex".to_string(),
+            "unknown".to_string(),
             None,
             "POST".to_string(),
             "/v1/responses".to_string(),
@@ -1144,6 +1159,7 @@ mod tests {
         let (log_args, cloned_attempts) = RequestLogEnqueueArgs::from_proxy_request_end_parts(
             "trace-timeout-storm",
             "claude",
+            "unknown",
             Some("session-timeout".to_string()),
             "POST",
             "/v1/messages",
@@ -1253,6 +1269,7 @@ mod tests {
         let (log_args, cloned_attempts) = RequestLogEnqueueArgs::from_proxy_request_end_parts(
             "trace-bounded-attempts",
             "claude",
+            "unknown",
             Some("session-bounded".to_string()),
             "POST",
             "/v1/messages",
@@ -1406,6 +1423,7 @@ mod tests {
         let (log_args, cloned_attempts) = RequestLogEnqueueArgs::from_stream_request_end_parts(
             "trace-2".to_string(),
             "codex".to_string(),
+            "unknown".to_string(),
             None,
             "POST".to_string(),
             "/v1/responses".to_string(),

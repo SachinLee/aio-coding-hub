@@ -179,6 +179,7 @@ where
     let ctx = CommonCtx::from(CommonCtxArgs {
         state: &input.state,
         cli_key: &input.cli_key,
+        client_identity: &input.client_identity,
         forwarded_path: &input.forwarded_path,
         observe: input.observe_request,
         method_hint: &input.method_hint,
@@ -269,6 +270,7 @@ where
             observe: input.observe_request,
             attempts: std::mem::take(&mut run_state.attempts),
             cli_key: owned.cli_key,
+            client_identity: owned.client_identity,
             method_hint: owned.method_hint,
             forwarded_path: owned.forwarded_path,
             query: owned.query,
@@ -300,6 +302,7 @@ where
         attempts: std::mem::take(&mut run_state.attempts),
         last_outcome: run_state.last_outcome,
         cli_key: owned.cli_key,
+        client_identity: owned.client_identity,
         method_hint: owned.method_hint,
         forwarded_path: owned.forwarded_path,
         query: owned.query,

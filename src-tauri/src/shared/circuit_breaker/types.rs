@@ -153,10 +153,10 @@ impl ProviderHealth {
 use std::collections::HashMap;
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
-#[derive(Debug)]
 pub struct CircuitBreaker {
     pub(super) config: Mutex<CircuitBreakerConfig>,
     pub(super) health: Mutex<HashMap<i64, ProviderHealth>>,
+    pub(super) model_health: Mutex<HashMap<(i64, String), ProviderHealth>>,
     pub(super) persist_tx: Option<mpsc::Sender<CircuitPersistedState>>,
     pub(super) persist_backlog: Arc<Mutex<HashMap<i64, CircuitPersistedState>>>,
     pub(super) persist_backlog_flush_scheduled: Arc<AtomicBool>,

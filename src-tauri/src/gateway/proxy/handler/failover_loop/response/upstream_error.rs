@@ -561,46 +561,77 @@ pub(super) async fn handle_non_success_response<R: tauri::Runtime>(
         && !oauth_quota_exhausted
         && !matched_claude_client_restriction
     {
-        let change = provider_router::record_failure_and_emit_transition(
-            provider_router::RecordCircuitArgs::from_state(
-                state,
-                ctx.trace_id.as_str(),
-                ctx.cli_key.as_str(),
-                provider_id,
-                provider_name_base.as_str(),
-                provider_base_url_base.as_str(),
-                now_unix,
-            )
-            .with_provider_health_neutral(ctx.provider_health_neutral),
-        );
-        *circuit_snapshot = change.after.clone();
-        circuit_state_before = Some(change.before.state.as_str());
-        circuit_state_after = Some(change.after.state.as_str());
-        circuit_failure_count = Some(change.after.failure_count);
+        let model_scoped = ctx
+            .requested_model
+            .as_deref()
+            .filter(|model| !model.is_empty())
+            .filter(|_| {
+                matches!(status.as_u16(), 429 | 500..=599)
+                    && matched_rule_id != Some("quota_exhausted")
+                    && !matched_429_concurrency_limit
+            });
+        if ctx.provider_health_neutral {
+        } else if let Some(model) = model_scoped {
+            let change = state
+                .circuit
+                .record_failure_model(provider_id, model, now_unix);
+            *circuit_snapshot = change.after.clone();
+            circuit_state_before = Some(change.before.state.as_str());
+            circuit_state_after = Some(change.after.state.as_str());
+            circuit_failure_count = Some(change.after.failure_count);
+            if change.after.state == circuit_breaker::CircuitState::Open {
+                decision = FailoverDecision::SwitchProvider;
+            }
+            if provider_cooldown_secs > 0
+                && matches!(
+                    decision,
+                    FailoverDecision::SwitchProvider | FailoverDecision::Abort
+                )
+            {
+                *circuit_snapshot = state.circuit.trigger_cooldown_model(
+                    provider_id,
+                    model,
+                    now_unix,
+                    provider_cooldown_secs,
+                );
+            }
+        } else {
+            let change = provider_router::record_failure_and_emit_transition(
+                provider_router::RecordCircuitArgs::from_state(
+                    state,
+                    ctx.trace_id.as_str(),
+                    ctx.cli_key.as_str(),
+                    provider_id,
+                    provider_name_base.as_str(),
+                    provider_base_url_base.as_str(),
+                    now_unix,
+                )
+                .with_provider_health_neutral(ctx.provider_health_neutral),
+            );
+            *circuit_snapshot = change.after.clone();
+            circuit_state_before = Some(change.before.state.as_str());
+            circuit_state_after = Some(change.after.state.as_str());
+            circuit_failure_count = Some(change.after.failure_count);
 
-        if change.after.state == circuit_breaker::CircuitState::Open {
-            decision = FailoverDecision::SwitchProvider;
+            if change.after.state == circuit_breaker::CircuitState::Open {
+                decision = FailoverDecision::SwitchProvider;
+            }
+            if provider_cooldown_secs > 0
+                && matches!(
+                    decision,
+                    FailoverDecision::SwitchProvider | FailoverDecision::Abort
+                )
+            {
+                let snap = provider_router::trigger_cooldown(
+                    state.circuit.as_ref(),
+                    provider_id,
+                    now_unix,
+                    provider_cooldown_secs,
+                    ctx.provider_health_neutral,
+                );
+                *circuit_snapshot = snap;
+            }
         }
-    }
-
-    if !is_count_tokens
-        && provider_cooldown_secs > 0
-        && matches!(category, ErrorCategory::ProviderError)
-        && !oauth_quota_exhausted
-        && !matched_claude_client_restriction
-        && matches!(
-            decision,
-            FailoverDecision::SwitchProvider | FailoverDecision::Abort
-        )
-    {
-        let snap = provider_router::trigger_cooldown(
-            state.circuit.as_ref(),
-            provider_id,
-            now_unix,
-            provider_cooldown_secs,
-            ctx.provider_health_neutral,
-        );
-        *circuit_snapshot = snap;
     }
 
     let reason = if matched_claude_client_restriction {
@@ -698,6 +729,7 @@ pub(super) async fn handle_non_success_response<R: tauri::Runtime>(
 
             let CommonCtxOwned {
                 cli_key,
+                client_identity,
                 method_hint,
                 forwarded_path,
                 query,
@@ -749,6 +781,7 @@ pub(super) async fn handle_non_success_response<R: tauri::Runtime>(
                         ),
                         trace_id: trace_id.as_str(),
                         cli_key: cli_key.as_str(),
+                        client_identity: client_identity.as_str(),
                         method: method_hint.as_str(),
                         path: forwarded_path.as_str(),
                         observe: ctx.observe,
@@ -795,6 +828,7 @@ pub(super) async fn handle_non_success_response<R: tauri::Runtime>(
                     ),
                     trace_id: trace_id.as_str(),
                     cli_key: cli_key.as_str(),
+                    client_identity: client_identity.as_str(),
                     method: method_hint.as_str(),
                     path: forwarded_path.as_str(),
                     observe: ctx.observe,

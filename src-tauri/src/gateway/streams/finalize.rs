@@ -38,16 +38,39 @@ pub(super) fn finalize_circuit_and_session<R: tauri::Runtime>(
         && ctx.provider_cooldown_secs > 0
         && !oauth_quota_exhausted
     {
-        provider_router::trigger_cooldown(
-            ctx.circuit.as_ref(),
-            ctx.provider_id,
-            now_unix,
-            ctx.provider_cooldown_secs,
-            ctx.provider_health_neutral,
-        );
+        if !ctx.provider_health_neutral {
+            if let Some(model) = ctx
+                .requested_model
+                .as_deref()
+                .filter(|model| !model.is_empty())
+            {
+                ctx.circuit.trigger_cooldown_model(
+                    ctx.provider_id,
+                    model,
+                    now_unix,
+                    ctx.provider_cooldown_secs,
+                );
+            } else {
+                provider_router::trigger_cooldown(
+                    ctx.circuit.as_ref(),
+                    ctx.provider_id,
+                    now_unix,
+                    ctx.provider_cooldown_secs,
+                    false,
+                );
+            }
+        }
     }
 
     if error_code.is_none() && (200..300).contains(&ctx.status) && !ctx.fake_200_detected {
+        if let Some(model) = ctx
+            .requested_model
+            .as_deref()
+            .filter(|model| !model.is_empty())
+        {
+            ctx.circuit
+                .record_success_model(ctx.provider_id, model, now_unix);
+        }
         let _ = provider_router::record_success_and_emit_transition(
             provider_router::RecordCircuitArgs::from_stream_ctx(ctx, now_unix),
         );
@@ -60,20 +83,24 @@ pub(super) fn finalize_circuit_and_session<R: tauri::Runtime>(
                 now_unix,
             );
         }
-    } else if ctx.fake_200_detected && (200..300).contains(&ctx.status) {
-        // Fake 200: upstream returned HTTP 200 but body contained an error payload.
-        // Record as failure for circuit breaker; do not bind session.
-        if !oauth_quota_exhausted {
-            let _ = provider_router::record_failure_and_emit_transition(
-                provider_router::RecordCircuitArgs::from_stream_ctx(ctx, now_unix),
-            );
-        }
-    } else if effective_error_category == Some(ErrorCategory::ProviderError.as_str())
+    } else if (ctx.fake_200_detected && (200..300).contains(&ctx.status)
+        || effective_error_category == Some(ErrorCategory::ProviderError.as_str()))
         && !oauth_quota_exhausted
     {
-        let _ = provider_router::record_failure_and_emit_transition(
-            provider_router::RecordCircuitArgs::from_stream_ctx(ctx, now_unix),
-        );
+        if !ctx.provider_health_neutral {
+            if let Some(model) = ctx
+                .requested_model
+                .as_deref()
+                .filter(|model| !model.is_empty())
+            {
+                ctx.circuit
+                    .record_failure_model(ctx.provider_id, model, now_unix);
+            } else {
+                let _ = provider_router::record_failure_and_emit_transition(
+                    provider_router::RecordCircuitArgs::from_stream_ctx(ctx, now_unix),
+                );
+            }
+        }
     }
 
     effective_error_category

@@ -712,3 +712,24 @@ fn closed_success_clears_trigger_error_code() {
     assert_eq!(change.after.state, CircuitState::Closed);
     assert_eq!(change.after.last_trigger_error_code, None);
 }
+
+#[test]
+fn model_failure_does_not_open_another_model_or_the_provider() {
+    let cb = CircuitBreaker::new(
+        CircuitBreakerConfig {
+            failure_threshold: 1,
+            open_duration_secs: 60,
+        },
+        HashMap::new(),
+        None,
+    );
+    let now = 1_000;
+    cb.record_failure_model(7, "gpt-x", now);
+    assert!(!cb.should_allow_model(7, "gpt-x", now).allow);
+    assert!(cb.should_allow_model(7, "deepseek-y", now).allow);
+    assert!(cb.should_allow(7, now).allow);
+    cb.record_success_model(7, "gpt-x", now + 61);
+    cb.record_success_model(7, "gpt-x", now + 62);
+    cb.record_success_model(7, "gpt-x", now + 63);
+    assert!(cb.should_allow_model(7, "gpt-x", now + 63).allow);
+}

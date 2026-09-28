@@ -210,6 +210,7 @@ pub(super) fn resolve_session_bound_provider_id(
     forced_provider_id: Option<i64>,
     providers: &mut Vec<providers::ProviderForGateway>,
     bound_provider_order: Option<&[i64]>,
+    requested_model: Option<&str>,
 ) -> SessionBoundResult {
     let bound_provider_id =
         session_id.and_then(|sid| session.get_bound_provider(cli_key, sid, created_at));
@@ -222,7 +223,10 @@ pub(super) fn resolve_session_bound_provider_id(
                 // cannot bypass selection constraints.
                 session.clear_bound_provider(cli_key, session_id, created_at);
             } else {
-                let check = circuit.should_allow(bound_provider_id, created_at);
+                let check = match requested_model.filter(|m| !m.is_empty()) {
+                    Some(model) => circuit.should_allow_model(bound_provider_id, model, created_at),
+                    None => circuit.should_allow(bound_provider_id, created_at),
+                };
                 if !check.allow {
                     providers.retain(|provider| provider.id != bound_provider_id);
                     return SessionBoundResult::DeniedByCircuit {

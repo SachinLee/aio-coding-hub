@@ -37,6 +37,24 @@ pub(super) fn gate_provider<R: tauri::Runtime>(
     } = input;
 
     let now_unix = now_unix_seconds() as i64;
+    if let Some(model) = ctx
+        .requested_model
+        .as_deref()
+        .filter(|model| !model.is_empty())
+    {
+        let check = ctx
+            .state
+            .circuit
+            .should_allow_model(provider_id, model, now_unix);
+        if !check.allow {
+            *deny_snapshot = Some(check.after);
+            *skipped_open = skipped_open.saturating_add(1);
+            return None;
+        }
+        return Some(ProviderGateAllow {
+            circuit_after: check.after,
+        });
+    }
     provider_router::gate_provider(provider_router::GateProviderArgs {
         app: Some(&ctx.state.app),
         circuit: ctx.state.circuit.as_ref(),

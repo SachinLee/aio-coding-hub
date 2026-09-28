@@ -85,6 +85,42 @@ impl ProviderResolutionMiddleware {
             ctx.requested_model.as_deref(),
             ctx.forced_provider_id,
         );
+        if let Some(model) = ctx
+            .requested_model
+            .clone()
+            .filter(|model| !model.is_empty())
+        {
+            let db = ctx.state.db.clone();
+            let cli_key = ctx.cli_key.clone();
+            let mut providers = std::mem::take(&mut ctx.providers);
+            let filtered = crate::blocking::run("model_catalog_route", move || {
+                crate::infra::provider_model_catalog::retain_routable_providers_for_cli(
+                    &db,
+                    &cli_key,
+                    &mut providers,
+                    &model,
+                )?;
+                Ok::<_, crate::shared::error::AppError>(providers)
+            })
+            .await;
+            match filtered {
+                Ok(providers) => ctx.providers = providers,
+                Err(err) => {
+                    let log_ctx = build_early_error_log_ctx(&ctx);
+                    let special_settings_json =
+                        response_fixer::special_settings_json(&ctx.special_settings);
+                    return MiddlewareAction::ShortCircuit(
+                        respond_provider_selection_failed_with_spawn(
+                            &log_ctx,
+                            special_settings_json,
+                            ctx.session_id.clone(),
+                            ctx.requested_model.clone(),
+                            err.to_string(),
+                        ),
+                    );
+                }
+            }
+        }
         let initial_provider_ids = model_policy_filter.original_provider_ids.clone();
         let provider_ids_after_policy = provider_ids(&ctx.providers);
         let no_eligible_after_policy = ctx.requested_model.is_some()
@@ -108,6 +144,23 @@ impl ProviderResolutionMiddleware {
             &ctx.special_settings,
         );
 
+        // Model circuits are request-scoped; remove only the affected provider/model pair
+        // before session reuse so a provider-level circuit cannot mask sibling models.
+        if ctx
+            .requested_model
+            .as_deref()
+            .is_some_and(|model| !model.is_empty())
+        {
+            let model = ctx.requested_model.as_deref().unwrap_or_default();
+            let now_unix = crate::gateway::util::now_unix_seconds() as i64;
+            let circuit = ctx.state.circuit.clone();
+            ctx.providers.retain(|provider| {
+                circuit
+                    .should_allow_model(provider.id, model, now_unix)
+                    .allow
+            });
+        }
+
         // --- session bound provider ---
         // The function now returns an explicit outcome so callers can observe *why*
         // a bound provider was not used (especially the single-provider + circuit-open case).
@@ -121,6 +174,7 @@ impl ProviderResolutionMiddleware {
             ctx.forced_provider_id,
             &mut ctx.providers,
             selection.bound_provider_order.as_deref(),
+            ctx.requested_model.as_deref(),
         );
 
         ctx.session_bound_provider_id = match &binding_outcome {

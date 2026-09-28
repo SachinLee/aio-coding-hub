@@ -346,6 +346,7 @@ fn resolve_session_bound_provider_id_skips_disabled_bound_provider() {
         None,
         &mut enabled,
         Some(&order),
+        None,
     );
 
     // Disabled provider must NOT be re-inserted; fall through to next enabled provider
@@ -390,6 +391,7 @@ fn resolve_session_bound_provider_id_skips_insertion_when_forced_provider_presen
         Some(id2),
         &mut enabled,
         Some(&order),
+        None,
     );
 
     assert!(matches!(outcome, SessionBoundResult::NoPreference));
@@ -433,6 +435,7 @@ fn resolve_session_bound_provider_id_does_not_insert_when_reuse_disabled() {
         None,
         &mut enabled,
         Some(&order),
+        None,
     );
 
     assert!(matches!(outcome, SessionBoundResult::NoPreference));
@@ -476,6 +479,7 @@ fn resolve_session_bound_provider_id_clears_stale_binding_when_bound_provider_no
         None,
         &mut candidates,
         Some(&order),
+        None,
     );
 
     // Must NOT re-insert the stale provider; reuse should fall through.
@@ -513,6 +517,7 @@ fn default_mode_switches_to_enabled_provider_after_bound_provider_disabled_and_c
         None,
         &mut enabled,
         Some(&[p1.id, p2.id]),
+        None,
     );
 
     assert_eq!(ids(&enabled), vec![p2.id]);
@@ -550,6 +555,7 @@ fn sort_mode_ignores_global_provider_enabled_but_open_circuit_falls_back() {
         None,
         &mut enabled,
         Some(&[p1.id, p2.id]),
+        None,
     );
 
     assert_eq!(ids(&enabled), vec![p2.id]);
@@ -604,6 +610,7 @@ fn acceptance_session_bound_provider_falls_back_when_bound_provider_circuit_is_o
         None,
         &mut enabled,
         Some(&[id1, id2]),
+        None,
     );
 
     // This is the important case for observability: single (or last) bound provider denied by circuit.

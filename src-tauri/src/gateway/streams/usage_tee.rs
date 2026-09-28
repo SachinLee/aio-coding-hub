@@ -946,6 +946,7 @@ mod tests {
             sort_mode_id: None,
             trace_id: "trace-usage-tee-drain".to_string(),
             cli_key: "codex".to_string(),
+            client_identity: "unknown".to_string(),
             method: "POST".to_string(),
             path: "/v1/responses".to_string(),
             observe: true,

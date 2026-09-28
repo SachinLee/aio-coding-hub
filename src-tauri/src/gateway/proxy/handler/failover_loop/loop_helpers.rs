@@ -7,6 +7,7 @@ use super::*;
 
 pub(super) struct FinalizeOwnedCommon {
     pub(super) cli_key: String,
+    pub(super) client_identity: String,
     pub(super) method_hint: String,
     pub(super) forwarded_path: String,
     pub(super) query: Option<String>,
@@ -21,6 +22,7 @@ pub(super) fn finalize_owned_from_input<R: tauri::Runtime>(
 ) -> FinalizeOwnedCommon {
     FinalizeOwnedCommon {
         cli_key: input.cli_key.clone(),
+        client_identity: input.client_identity.clone(),
         method_hint: input.method_hint.clone(),
         forwarded_path: input.forwarded_path.clone(),
         query: input.query.clone(),

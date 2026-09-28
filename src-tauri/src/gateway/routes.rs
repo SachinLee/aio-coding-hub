@@ -5279,7 +5279,8 @@ module.exports.activate = function activate(api) {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn mock_runtime_router_codex_models_response_is_not_logged() {
+    async fn mock_runtime_router_codex_models_response_is_not_logged_and_unions_without_cli_proxy()
+    {
         let _env_lock = crate::test_support::test_env_lock();
         let home = tempfile::tempdir().expect("home dir");
         let _env = isolate_app_env(home.path());
@@ -5288,15 +5289,20 @@ module.exports.activate = function activate(api) {
 
         let app_settings = settings::AppSettings::default();
         settings::write(&app_handle, &app_settings).expect("write settings");
-        crate::cli_proxy::set_enabled(&app_handle, "codex", true, "http://127.0.0.1:37123")
-            .expect("enable codex cli proxy");
 
         let db_dir = tempfile::tempdir().expect("db dir");
         let db = db::init_for_tests(&db_dir.path().join("gateway-route-codex-models-test.sqlite"))
             .expect("init test db");
         let success_body = r#"{"object":"list","data":[{"id":"gpt-5.5","object":"model"}]}"#;
         let (success_base_url, success_task) = spawn_json_upstream(success_body).await;
-        insert_codex_provider_with_priority(&db, "Models Stub", success_base_url, 0);
+        let second_body = r#"{"object":"list","data":[{"id":"deepseek-y","object":"model"}]}"#;
+        let (second_base_url, second_task) = spawn_json_upstream(second_body).await;
+        let first_provider_id =
+            insert_codex_provider_with_priority(&db, "Models Stub", success_base_url, 0);
+        let second_provider_id =
+            insert_codex_provider_with_priority(&db, "Second Models Stub", second_base_url, 1);
+        seed_provider_model_catalog(&db, first_provider_id, &["gpt-5.5", "shared-z"]);
+        seed_provider_model_catalog(&db, second_provider_id, &["deepseek-y", "shared-z"]);
 
         let (log_tx, writer_task) =
             request_logs::start_buffered_writer(app_handle.clone(), db.clone());
@@ -5315,17 +5321,28 @@ module.exports.activate = function activate(api) {
             .and_then(|value| value.to_str().ok())
             .expect("trace header")
             .to_string();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("model list body");
+        let payload: Value = serde_json::from_slice(&body).expect("model list json");
+        let ids = payload["data"]
+            .as_array()
+            .expect("model data")
+            .iter()
+            .filter_map(|item| item.get("id").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec!["deepseek-y", "gpt-5.5", "shared-z"]);
 
         tokio::time::timeout(Duration::from_secs(2), writer_task)
             .await
             .expect("writer drain timeout")
             .expect("writer task joins");
-
         assert!(request_logs::get_by_trace_id(&db, &trace_id)
             .expect("query request log")
             .is_none());
 
         success_task.abort();
+        second_task.abort();
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -5383,11 +5400,11 @@ module.exports.activate = function activate(api) {
             .expect("request");
 
         let response = router.oneshot(request).await.expect("route response");
-        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+        assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             call_count.load(std::sync::atomic::Ordering::SeqCst),
-            1,
-            "Codex model discovery must not retry the same provider"
+            0,
+            "model list reads cached catalogs and must not call upstream"
         );
 
         let circuit_snapshot =
@@ -5441,6 +5458,8 @@ module.exports.activate = function activate(api) {
             insert_codex_provider_with_priority(&db, "Models Failure Stub", failure_base_url, 0);
         let success_provider_id =
             insert_codex_provider_with_priority(&db, "Models Success Stub", success_base_url, 1);
+        seed_provider_model_catalog(&db, failure_provider_id, &["gpt-x", "shared-z"]);
+        seed_provider_model_catalog(&db, success_provider_id, &["deepseek-y", "shared-z"]);
 
         let (log_tx, writer_task) =
             request_logs::start_buffered_writer(app_handle.clone(), db.clone());
@@ -5479,11 +5498,30 @@ module.exports.activate = function activate(api) {
             .to_string();
         assert_eq!(
             failure_call_count.load(std::sync::atomic::Ordering::SeqCst),
-            1
+            0
         );
         assert_eq!(
             success_call_count.load(std::sync::atomic::Ordering::SeqCst),
-            1
+            0
+        );
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("model list body");
+        let payload: Value = serde_json::from_slice(&body).expect("model list json");
+        let ids = payload["data"]
+            .as_array()
+            .expect("model data")
+            .iter()
+            .filter_map(|item| item.get("id").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            ids,
+            vec![
+                "deepseek-y".to_string(),
+                "gpt-x".to_string(),
+                "shared-z".to_string()
+            ]
         );
 
         let checked_at = crate::gateway::util::now_unix_seconds() as i64;
@@ -5504,6 +5542,25 @@ module.exports.activate = function activate(api) {
 
         failure_task.abort();
         success_task.abort();
+    }
+    fn seed_provider_model_catalog(db: &db::Db, provider_id: i64, models: &[&str]) {
+        let version =
+            crate::infra::provider_model_catalog::provider_config_version(db, provider_id)
+                .expect("provider config version")
+                .expect("provider exists");
+        let models = models
+            .iter()
+            .copied()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        crate::infra::provider_model_catalog::save_success(
+            db,
+            provider_id,
+            version,
+            &models,
+            version,
+        )
+        .expect("save provider model catalog");
     }
 
     #[tokio::test(flavor = "current_thread")]

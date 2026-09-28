@@ -1,6 +1,7 @@
 //! Usage: Handle successful non-SSE upstream responses inside `failover_loop::run`.
 
 use super::*;
+use crate::circuit_breaker;
 use crate::domain::provider_oauth_limits;
 use crate::gateway::plugins::context::{GatewayPluginHookName, GatewayResponseHookInput};
 use crate::gateway::proxy::{
@@ -1023,6 +1024,32 @@ where
                     "failed to save OAuth exhausted quota snapshot: {err}"
                 );
             }
+        } else if let Some(model) = common
+            .requested_model
+            .as_deref()
+            .filter(|model| !model.is_empty())
+        {
+            let change = if common.provider_health_neutral {
+                let snapshot = state
+                    .circuit
+                    .should_allow_model(provider_id, model, now_unix)
+                    .after;
+                circuit_breaker::CircuitChange {
+                    before: snapshot.clone(),
+                    after: snapshot,
+                    transition: None,
+                }
+            } else {
+                state
+                    .circuit
+                    .record_failure_model(provider_id, model, now_unix)
+            };
+            if let Some(last) = attempts.last_mut() {
+                last.circuit_state_after = Some(change.after.state.as_str());
+                last.circuit_failure_count = Some(change.after.failure_count);
+                last.circuit_failure_threshold = Some(change.after.failure_threshold);
+            }
+            *circuit_snapshot = change.after.clone();
         } else {
             let change = provider_router::record_failure_and_emit_transition(
                 provider_router::RecordCircuitArgs::from_state(
@@ -1074,6 +1101,7 @@ where
                 ),
                 trace_id: common.trace_id.as_str(),
                 cli_key: common.cli_key.as_str(),
+                client_identity: common.client_identity.as_str(),
                 method: common.method_hint.as_str(),
                 path: common.forwarded_path.as_str(),
                 observe: common.observe,
@@ -1210,6 +1238,15 @@ where
 
     if out.status() == status {
         let now_unix = now_unix_seconds() as i64;
+        if let Some(model) = common
+            .requested_model
+            .as_deref()
+            .filter(|model| !model.is_empty())
+        {
+            let _ = state
+                .circuit
+                .record_success_model(provider_id, model, now_unix);
+        }
         let change = provider_router::record_success_and_emit_transition(
             provider_router::RecordCircuitArgs::from_state(
                 state,
@@ -1252,6 +1289,7 @@ where
             ),
             trace_id: common.trace_id.as_str(),
             cli_key: common.cli_key.as_str(),
+            client_identity: common.client_identity.as_str(),
             method: common.method_hint.as_str(),
             path: common.forwarded_path.as_str(),
             observe: common.observe,
