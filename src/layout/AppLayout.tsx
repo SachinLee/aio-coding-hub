@@ -7,6 +7,7 @@ import { cn } from "../utils/cn";
 function getRouteTheme(pathname: string): string {
   if (pathname === "/") return "theme-blue";
   if (pathname.startsWith("/providers")) return "theme-cyan";
+  if (pathname.startsWith("/model-catalog")) return "theme-emerald";
   if (pathname.startsWith("/sessions")) return "theme-violet";
   if (pathname.startsWith("/workspaces")) return "theme-emerald";
   if (pathname.startsWith("/prompts")) return "theme-amber";

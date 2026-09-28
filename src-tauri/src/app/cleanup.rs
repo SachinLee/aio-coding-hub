@@ -204,6 +204,7 @@ pub(crate) async fn stop_gateway_best_effort_unlocked<R: tauri::Runtime>(
         mut circuit_task,
         _oauth_refresh_shutdown,
         mut oauth_refresh_task,
+        mut model_catalog_task,
     )) = running
     else {
         return;
@@ -225,6 +226,7 @@ pub(crate) async fn stop_gateway_best_effort_unlocked<R: tauri::Runtime>(
         &mut log_task,
         &mut circuit_task,
         &mut oauth_refresh_task,
+        &mut model_catalog_task,
         GATEWAY_STOP_TIMEOUTS,
     )
     .await;
@@ -278,6 +280,7 @@ async fn stop_gateway_tasks_best_effort(
     log_task: &mut tauri::async_runtime::JoinHandle<()>,
     circuit_task: &mut tauri::async_runtime::JoinHandle<()>,
     oauth_refresh_task: &mut tauri::async_runtime::JoinHandle<()>,
+    model_catalog_task: &mut tauri::async_runtime::JoinHandle<()>,
     timeouts: GatewayStopTimeouts,
 ) {
     if !join_task_with_timeout(server_task, timeouts.server_stop).await {
@@ -302,6 +305,12 @@ async fn stop_gateway_tasks_best_effort(
     if !join_task_with_timeout(oauth_refresh_task, timeouts.oauth_stop).await {
         tracing::warn!("exit cleanup: gateway OAuth refresh task stop timed out, aborting task");
         abort_task_and_wait(oauth_refresh_task, timeouts.abort_grace).await;
+    }
+    if !join_task_with_timeout(model_catalog_task, timeouts.oauth_stop).await {
+        tracing::warn!(
+            "exit cleanup: gateway model catalog refresh task stop timed out, aborting task"
+        );
+        abort_task_and_wait(model_catalog_task, timeouts.abort_grace).await;
     }
 }
 
@@ -337,12 +346,14 @@ mod tests {
         });
         let mut circuit_task = tauri::async_runtime::spawn(async {});
         let mut oauth_refresh_task = tauri::async_runtime::spawn(async {});
+        let mut model_catalog_task = tauri::async_runtime::spawn(async {});
 
         stop_gateway_tasks_best_effort(
             &mut server_task,
             &mut log_task,
             &mut circuit_task,
             &mut oauth_refresh_task,
+            &mut model_catalog_task,
             GatewayStopTimeouts {
                 server_stop: Duration::from_millis(10),
                 background_drain: Duration::from_millis(100),

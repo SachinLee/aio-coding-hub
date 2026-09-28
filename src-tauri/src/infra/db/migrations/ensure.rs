@@ -26,6 +26,8 @@ pub(super) fn apply_ensure_patches(conn: &mut Connection) -> crate::shared::erro
     ensure_skills_update_columns(conn)?;
     ensure_plugin_tables(conn)?;
     ensure_provider_extension_values_table(conn)?;
+    ensure_provider_model_catalog_table(conn)?;
+    ensure_model_catalog_metadata_table(conn)?;
     Ok(())
 }
 
@@ -1187,11 +1189,63 @@ CREATE INDEX IF NOT EXISTS idx_provider_extension_values_plugin_namespace
     Ok(())
 }
 
+fn ensure_provider_model_catalog_table(
+    conn: &mut Connection,
+) -> crate::shared::error::AppResult<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS provider_model_catalogs (
+  provider_id INTEGER PRIMARY KEY,
+  config_version INTEGER NOT NULL,
+  models_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'failed',
+  last_success_at INTEGER,
+  last_attempt_at INTEGER NOT NULL,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_provider_model_catalogs_status
+  ON provider_model_catalogs(status);
+"#,
+    )
+    .map_err(|e| format!("failed to ensure provider model catalog table: {e}"))?;
+    Ok(())
+}
+fn ensure_model_catalog_metadata_table(
+    conn: &mut Connection,
+) -> crate::shared::error::AppResult<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS model_catalog_metadata (
+  cli_key TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  context_window INTEGER NOT NULL,
+  reasoning_effort TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(cli_key, model_id)
+);
+CREATE INDEX IF NOT EXISTS idx_model_catalog_metadata_cli_key
+  ON model_catalog_metadata(cli_key);
+"#,
+    )
+    .map_err(|e| format!("failed to ensure model catalog metadata table: {e}"))?;
+
+    if !column_exists(conn, "model_catalog_metadata", "enabled")? {
+        conn.execute_batch(
+            "ALTER TABLE model_catalog_metadata ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;",
+        )
+        .map_err(|e| format!("failed to add model_catalog_metadata.enabled column: {e}"))?;
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Shared helper
 // ---------------------------------------------------------------------------
 
-fn column_exists(
+pub(super) fn column_exists(
     conn: &Connection,
     table: &str,
     column: &str,

@@ -56,6 +56,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: "/", label: "首页", icon: Activity, theme: "blue" },
       { to: "/providers", label: "供应商", icon: Boxes, theme: "cyan" },
+      { to: "/model-catalog", label: "模型目录", icon: Cpu, theme: "emerald" },
       { to: "/image-gen", label: "生图", icon: ImagePlus, theme: "pink" },
       { to: "/sessions", label: "Session 会话", icon: MessageSquare, theme: "violet" },
     ],

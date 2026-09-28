@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS request_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   trace_id TEXT NOT NULL,
   cli_key TEXT NOT NULL,
+  client_identity TEXT NOT NULL DEFAULT 'unknown',
   method TEXT NOT NULL,
   path TEXT NOT NULL,
   query TEXT,
@@ -294,6 +295,19 @@ CREATE TABLE IF NOT EXISTS image_gen_tasks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_image_gen_tasks_created ON image_gen_tasks(created_at DESC);
+CREATE TABLE IF NOT EXISTS provider_model_catalogs (
+  provider_id INTEGER PRIMARY KEY,
+  config_version INTEGER NOT NULL,
+  models_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'failed',
+  last_success_at INTEGER,
+  last_attempt_at INTEGER NOT NULL,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_provider_model_catalogs_status
+  ON provider_model_catalogs(status);
 "#,
     )
     .map_err(|e| format!("failed to create baseline v25 schema: {e}"))?;

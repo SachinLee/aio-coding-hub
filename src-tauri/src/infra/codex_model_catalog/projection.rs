@@ -31,7 +31,8 @@ pub(crate) fn build_for_proxy<R: tauri::Runtime>(
     db_override: Option<&db::Db>,
 ) -> crate::shared::error::AppResult<Option<CatalogProjection>> {
     let policies = load_routable_ready_policies(app, db_override)?;
-    if mapping_source_signature(&policies).is_empty() {
+    let discovered = load_discovered_models(app, db_override)?;
+    if mapping_source_signature(&policies).is_empty() && discovered.is_empty() {
         return Ok(None);
     }
 
@@ -42,7 +43,44 @@ pub(crate) fn build_for_proxy<R: tauri::Runtime>(
     let bundled = parse_catalog_json(&bundled_bytes, "bundled Codex catalog")?;
     let user_catalog = load_user_catalog(original_config, original_aio_catalog, &codex_home)?;
 
-    build_projection(&bundled, user_catalog.as_ref(), &policies).map_err(Into::into)
+    let mut value = bundled.clone();
+    if let Some(user_catalog) = user_catalog.as_ref() {
+        let bundled_models = value
+            .get_mut("models")
+            .and_then(Value::as_array_mut)
+            .ok_or_else(|| {
+                "CLI_PROXY_CODEX_CATALOG_FAILED: bundled catalog models must be an array"
+                    .to_string()
+            })?;
+        let user_models = user_catalog
+            .get("models")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                "CLI_PROXY_CODEX_CATALOG_FAILED: user catalog models must be an array".to_string()
+            })?;
+        let mut seen = bundled_models
+            .iter()
+            .filter_map(model_slug)
+            .map(str::to_string)
+            .collect::<HashSet<_>>();
+        for model in user_models {
+            if let Some(slug) = model_slug(model) {
+                if seen.insert(slug.to_string()) {
+                    bundled_models.push(model.clone());
+                }
+            }
+        }
+    }
+    let projected = if mapping_source_signature(&policies).is_empty() {
+        append_discovered_models(&value, None, &discovered)?
+    } else {
+        let projection = build_projection(&value, None, &policies)?;
+        append_discovered_models(&value, projection, &discovered)?
+    };
+    // Catalog-disabled models are stripped last so they cannot re-enter
+    // through bundled, user, mapping-projection, or discovered paths.
+    let disabled = load_disabled_model_ids(app, db_override)?;
+    filter_disabled_catalog_models(projected, &disabled).map_err(Into::into)
 }
 
 pub(crate) fn parse_catalog_json(bytes: &[u8], label: &str) -> Result<Value, String> {
@@ -127,6 +165,179 @@ pub(crate) fn build_projection(
         ));
     }
 
+    Ok(Some(CatalogProjection {
+        bytes,
+        affected_sources,
+    }))
+}
+fn load_discovered_models<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    db_override: Option<&db::Db>,
+) -> crate::shared::error::AppResult<Vec<String>> {
+    let owned;
+    let db = if let Some(db) = db_override {
+        db
+    } else {
+        let db_path = db::db_path(app)?;
+        if !db_path.exists() {
+            return Ok(Vec::new());
+        }
+        owned = db::init(app)?;
+        &owned
+    };
+    let selection = providers::list_enabled_for_gateway_using_active_mode(db, "codex")?;
+    crate::infra::provider_model_catalog::union_models(db, &selection.providers)
+}
+
+fn load_disabled_model_ids<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    db_override: Option<&db::Db>,
+) -> crate::shared::error::AppResult<HashSet<String>> {
+    let owned;
+    let db = if let Some(db) = db_override {
+        db
+    } else {
+        let db_path = db::db_path(app)?;
+        if !db_path.exists() {
+            return Ok(HashSet::new());
+        }
+        owned = db::init(app)?;
+        &owned
+    };
+    crate::infra::model_catalog_metadata::disabled_model_ids(db, "codex")
+}
+
+fn filter_disabled_catalog_models(
+    projection: Option<CatalogProjection>,
+    disabled: &HashSet<String>,
+) -> Result<Option<CatalogProjection>, String> {
+    let Some(projection) = projection else {
+        return Ok(None);
+    };
+    if disabled.is_empty() {
+        return Ok(Some(projection));
+    }
+    let mut value = parse_catalog_json(&projection.bytes, "projected Codex catalog")?;
+    let models = value
+        .get_mut("models")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| {
+            "CLI_PROXY_CODEX_CATALOG_FAILED: projected catalog models must be an array".to_string()
+        })?;
+    models.retain(|model| match model_slug(model) {
+        Some(slug) => !disabled.contains(slug),
+        None => true,
+    });
+    if models.is_empty() {
+        return Ok(None);
+    }
+    let affected_sources = projection
+        .affected_sources
+        .into_iter()
+        .filter(|source| !disabled.contains(source))
+        .collect();
+    let mut bytes = serde_json::to_vec_pretty(&value)
+        .map_err(|error| format!("CLI_PROXY_CODEX_CATALOG_FAILED: serialize catalog: {error}"))?;
+    bytes.push(b'\n');
+    if bytes.len() > super::CODEX_CATALOG_MAX_BYTES {
+        return Err(format!(
+            "CLI_PROXY_CODEX_CATALOG_FAILED: projected catalog exceeds {} bytes",
+            super::CODEX_CATALOG_MAX_BYTES
+        ));
+    }
+    Ok(Some(CatalogProjection {
+        bytes,
+        affected_sources,
+    }))
+}
+
+fn append_discovered_models(
+    bundled: &Value,
+    projection: Option<CatalogProjection>,
+    discovered: &[String],
+) -> Result<Option<CatalogProjection>, String> {
+    if discovered.is_empty() {
+        return Ok(projection);
+    }
+    let mut value = match projection.as_ref() {
+        Some(projection) => parse_catalog_json(&projection.bytes, "projected Codex catalog")?,
+        None => bundled.clone(),
+    };
+    let models = value
+        .get_mut("models")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| {
+            "CLI_PROXY_CODEX_CATALOG_FAILED: catalog models must be an array".to_string()
+        })?;
+    let mut seen = models
+        .iter()
+        .filter_map(model_slug)
+        .map(str::to_string)
+        .collect::<HashSet<_>>();
+    for slug in discovered {
+        if !seen.insert(slug.clone()) {
+            continue;
+        }
+        models.push(serde_json::json!({
+            "slug": slug,
+            "display_name": slug,
+            "description": slug,
+            "base_instructions": "",
+            "context_window": 1_000_000,
+            "max_context_window": 1_000_000,
+            "effective_context_window_percent": 95,
+            "default_reasoning_level": "high",
+            "default_verbosity": "low",
+            "supported_reasoning_levels": [
+                {"effort": "low", "description": ""},
+                {"effort": "medium", "description": ""},
+                {"effort": "high", "description": ""},
+                {"effort": "xhigh", "description": ""},
+                {"effort": "max", "description": ""},
+            ],
+            "supported_in_api": true,
+            "supported_endpoints": [],
+            "supports_parallel_tool_calls": false,
+            "supports_search_tool": false,
+            "supports_reasoning_summaries": false,
+            "supports_reasoning_summary_parameter": false,
+            "supports_text_generation": true,
+            "supports_image_detail_original": false,
+            "support_verbosity": false,
+            "input_modalities": ["text", "image"],
+            "output_modalities": [],
+            "experimental_supported_tools": [],
+            "additional_speed_tiers": [],
+            "service_tiers": [],
+            "default_service_tier": null,
+            "auto_compact_token_limit": null,
+            "auto_review_model_override": null,
+            "prefer_websockets": false,
+            "minimal_client_version": null,
+            "reasoning_summary_format": null,
+            "priority": 0,
+            "shell_type": "shell_command",
+            "tool_mode": null,
+            "truncation_policy": {"mode": "tokens", "limit": 10_000},
+            "use_responses_lite": false,
+            "visibility": "list"
+        }));
+    }
+    let mut bytes = serde_json::to_vec_pretty(&value)
+        .map_err(|error| format!("CLI_PROXY_CODEX_CATALOG_FAILED: serialize catalog: {error}"))?;
+    bytes.push(b'\n');
+    if bytes.len() > super::CODEX_CATALOG_MAX_BYTES {
+        return Err(format!(
+            "CLI_PROXY_CODEX_CATALOG_FAILED: projected catalog exceeds {} bytes",
+            super::CODEX_CATALOG_MAX_BYTES
+        ));
+    }
+    let mut affected_sources = projection
+        .map(|projection| projection.affected_sources)
+        .unwrap_or_default();
+    affected_sources.extend(discovered.iter().cloned());
+    affected_sources.sort();
+    affected_sources.dedup();
     Ok(Some(CatalogProjection {
         bytes,
         affected_sources,
@@ -447,6 +658,47 @@ mod tests {
         assert!(luna.get("use_responses_lite").is_none());
         assert_eq!(luna["model_messages"]["instructions_template"], "keep me");
         assert_eq!(result.affected_sources, vec!["gpt-5.6-luna"]);
+    }
+
+    #[test]
+    fn discovered_model_uses_codex_safe_capabilities() {
+        let bundled = bundled();
+        let result = append_discovered_models(&bundled, None, &["deepseek-y".to_string()])
+            .expect("append")
+            .expect("catalog");
+        let value: Value = serde_json::from_slice(&result.bytes).expect("json");
+        let added = value["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|model| model["slug"] == "deepseek-y")
+            .expect("discovered model");
+        assert_eq!(added["display_name"], "deepseek-y");
+        assert_eq!(added["context_window"], 1_000_000);
+        assert_eq!(added["max_context_window"], 1_000_000);
+        assert_eq!(added["default_reasoning_level"], "high");
+        assert_eq!(
+            added["supported_reasoning_levels"],
+            serde_json::json!([
+                {"effort": "low", "description": ""},
+                {"effort": "medium", "description": ""},
+                {"effort": "high", "description": ""},
+                {"effort": "xhigh", "description": ""},
+                {"effort": "max", "description": ""},
+            ])
+        );
+        assert_eq!(added["supports_parallel_tool_calls"], false);
+        assert_eq!(added["supports_search_tool"], false);
+        assert_eq!(added["supported_in_api"], true);
+        assert_eq!(added["supported_endpoints"], serde_json::json!([]));
+        assert_eq!(added["supports_text_generation"], true);
+        assert_eq!(added["shell_type"], "shell_command");
+        assert_eq!(added["visibility"], "list");
+        assert_eq!(
+            added["truncation_policy"],
+            serde_json::json!({"mode": "tokens", "limit": 10_000})
+        );
+        assert_eq!(value["models"][0]["shell_type"], "shell_command");
     }
 
     #[test]

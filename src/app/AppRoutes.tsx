@@ -5,6 +5,9 @@ import { AppLayout } from "../layout/AppLayout";
 import { HomePage } from "../pages/HomePage";
 import { Spinner } from "../ui/Spinner";
 
+const ModelCatalogPage = lazy(() =>
+  import("../pages/ModelCatalogPage").then((m) => ({ default: m.ModelCatalogPage }))
+);
 const CliManagerPage = lazy(() =>
   import("../pages/CliManagerPage").then((m) => ({ default: m.CliManagerPage }))
 );
@@ -71,6 +74,7 @@ export function AppRoutes() {
         <Route index element={<HomePage />} />
         <Route path="/image-gen" element={<LazyPage Page={ImageGenPage} />} />
         <Route path="/providers" element={<LazyPage Page={ProvidersPage} />} />
+        <Route path="/model-catalog" element={<LazyPage Page={ModelCatalogPage} />} />
         <Route path="/sessions" element={<LazyPage Page={SessionsPage} />} />
         <Route
           path="/sessions/:source/:projectId"

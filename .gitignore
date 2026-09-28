@@ -58,3 +58,7 @@ src-tauri/target*/
 .codegraph/
 subagent.md
 .unknowns/
+.workflow/
+.omp/
+opencode.jsonc
+nul

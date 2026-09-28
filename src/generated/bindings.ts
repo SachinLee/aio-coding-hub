@@ -5,4366 +5,2178 @@
 
 /** user-defined commands **/
 
+
 export const commands = {
-  async settingsGet(): Promise<Result<SettingsView, string>> {
+async settingsGet() : Promise<Result<SettingsView, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("settings_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async settingsSet(update: SettingsUpdate): Promise<Result<SettingsMutationResult, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("settings_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async settingsSet(update: SettingsUpdate) : Promise<Result<SettingsMutationResult, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("settings_set", { update }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async settingsGatewayRectifierSet(
-    update: GatewayRectifierSettingsUpdate
-  ): Promise<Result<SettingsView, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("settings_set", { update }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async settingsGatewayRectifierSet(update: GatewayRectifierSettingsUpdate) : Promise<Result<SettingsView, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("settings_gateway_rectifier_set", { update }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async settingsCircuitBreakerNoticeSet(
-    update: CircuitBreakerNoticeUpdate
-  ): Promise<Result<SettingsView, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("settings_gateway_rectifier_set", { update }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async settingsCircuitBreakerNoticeSet(update: CircuitBreakerNoticeUpdate) : Promise<Result<SettingsView, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("settings_circuit_breaker_notice_set", { update }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async settingsCodexSessionIdCompletionSet(
-    update: CodexSessionIdCompletionUpdate
-  ): Promise<Result<SettingsView, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("settings_circuit_breaker_notice_set", { update }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async settingsCodexSessionIdCompletionSet(update: CodexSessionIdCompletionUpdate) : Promise<Result<SettingsView, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("settings_codex_session_id_completion_set", { update }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async configExport(filePath: string): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("settings_codex_session_id_completion_set", { update }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async configExport(filePath: string) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("config_export", { filePath }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async configImport(
-    filePath: string,
-    confirm: RiskyIpcConfirm | null
-  ): Promise<Result<ConfigImportResult, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("config_export", { filePath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async configImport(filePath: string, confirm: RiskyIpcConfirm | null) : Promise<Result<ConfigImportResult, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("config_import", { filePath, confirm }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async appAboutGet(): Promise<AppAboutInfo> {
+    return { status: "ok", data: await TAURI_INVOKE("config_import", { filePath, confirm }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async appAboutGet() : Promise<AppAboutInfo> {
     return await TAURI_INVOKE("app_about_get");
-  },
-  async appDataDirGet(): Promise<Result<string, string>> {
+},
+async appDataDirGet() : Promise<Result<string, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("app_data_dir_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async appExit(): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("app_data_dir_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async appExit() : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("app_exit") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async appRestart(): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("app_exit") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async appRestart() : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("app_restart") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async appHeartbeatPong(): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("app_restart") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async appHeartbeatPong() : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("app_heartbeat_pong") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async appStartupStatusGet(): Promise<AppStartupStatus> {
+    return { status: "ok", data: await TAURI_INVOKE("app_heartbeat_pong") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async appStartupStatusGet() : Promise<AppStartupStatus> {
     return await TAURI_INVOKE("app_startup_status_get");
-  },
-  async appStartupRetry(): Promise<AppStartupStatus> {
+},
+async appStartupRetry() : Promise<AppStartupStatus> {
     return await TAURI_INVOKE("app_startup_retry");
-  },
-  async appFrontendErrorReport(input: FrontendErrorReportInput): Promise<Result<boolean, string>> {
+},
+async appFrontendErrorReport(input: FrontendErrorReportInput) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("app_frontend_error_report", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async appMemoryDiagnosticsGet(): Promise<Result<AppMemoryDiagnosticsSnapshot, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("app_frontend_error_report", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async appMemoryDiagnosticsGet() : Promise<Result<AppMemoryDiagnosticsSnapshot, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("app_memory_diagnostics_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopClipboardWriteText(text: string): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("app_memory_diagnostics_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopClipboardWriteText(text: string) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_clipboard_write_text", { text }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopDialogOpen(
-    options: DesktopDialogOpenRequest
-  ): Promise<Result<string[] | null, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_clipboard_write_text", { text }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopDialogOpen(options: DesktopDialogOpenRequest) : Promise<Result<string[] | null, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_dialog_open", { options }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopDialogSave(
-    options: DesktopDialogSaveRequest
-  ): Promise<Result<string | null, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_dialog_open", { options }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopDialogSave(options: DesktopDialogSaveRequest) : Promise<Result<string | null, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_dialog_save", { options }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopNotificationIsPermissionGranted(): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_dialog_save", { options }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopNotificationIsPermissionGranted() : Promise<Result<boolean, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("desktop_notification_is_permission_granted"),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopNotificationNotify(
-    options: DesktopNotificationPayload
-  ): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_notification_is_permission_granted") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopNotificationNotify(options: DesktopNotificationPayload) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_notification_notify", { options }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopNotificationPlaySound(): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_notification_notify", { options }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopNotificationPlaySound() : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_notification_play_sound") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopNotificationRequestPermission(): Promise<
-    Result<DesktopNotificationPermissionState, string>
-  > {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_notification_play_sound") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopNotificationRequestPermission() : Promise<Result<DesktopNotificationPermissionState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_notification_request_permission") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopOpenerOpenPath(input: DesktopOpenPathRequest): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_notification_request_permission") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopOpenerOpenPath(input: DesktopOpenPathRequest) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_opener_open_path", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopOpenerOpenUrl(input: DesktopOpenUrlRequest): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_opener_open_path", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopOpenerOpenUrl(input: DesktopOpenUrlRequest) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_opener_open_url", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopOpenerRevealItemInDir(
-    input: DesktopRevealItemRequest
-  ): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_opener_open_url", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopOpenerRevealItemInDir(input: DesktopRevealItemRequest) : Promise<Result<boolean, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("desktop_opener_reveal_item_in_dir", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopUpdaterCheck(
-    timeout: number | null
-  ): Promise<Result<DesktopUpdaterMetadata | null, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_opener_reveal_item_in_dir", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopUpdaterCheck(timeout: number | null) : Promise<Result<DesktopUpdaterMetadata | null, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_updater_check", { timeout }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async desktopWindowSetTheme(theme: DesktopThemeMode): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_updater_check", { timeout }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async desktopWindowSetTheme(theme: DesktopThemeMode) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("desktop_window_set_theme", { theme }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async noticeSend(input: NoticeSendInput): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("desktop_window_set_theme", { theme }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async noticeSend(input: NoticeSendInput) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("notice_send", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerClaudeInfoGet(): Promise<Result<ClaudeCliInfo, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("notice_send", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerClaudeInfoGet() : Promise<Result<ClaudeCliInfo, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_info_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerCodexInfoGet(): Promise<Result<SimpleCliInfo, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_info_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerCodexInfoGet() : Promise<Result<SimpleCliInfo, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_info_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerCodexModelCatalogGet(): Promise<Result<CodexModelCatalogState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_info_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerCodexModelCatalogGet() : Promise<Result<CodexModelCatalogState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_model_catalog_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerCodexConfigGet(): Promise<Result<CodexConfigState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_model_catalog_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerCodexModelCatalogRefresh() : Promise<Result<null, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_config_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerCodexConfigSet(
-    patch: CodexConfigPatch
-  ): Promise<Result<CodexConfigState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_model_catalog_refresh") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerCodexConfigGet() : Promise<Result<CodexConfigState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_config_set", { patch }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerCodexConfigTomlGet(): Promise<Result<CodexConfigTomlState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_config_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerCodexConfigSet(patch: CodexConfigPatch) : Promise<Result<CodexConfigState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_config_toml_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerCodexConfigTomlValidate(
-    toml: string
-  ): Promise<Result<CodexConfigTomlValidationResult, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_config_set", { patch }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerCodexConfigTomlGet() : Promise<Result<CodexConfigTomlState, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_manager_codex_config_toml_validate", { toml }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerCodexConfigTomlSet(toml: string): Promise<Result<CodexConfigState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_config_toml_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerCodexConfigTomlValidate(toml: string) : Promise<Result<CodexConfigTomlValidationResult, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_manager_codex_config_toml_set", { toml }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerGeminiInfoGet(): Promise<Result<SimpleCliInfo, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_config_toml_validate", { toml }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerCodexConfigTomlSet(toml: string) : Promise<Result<CodexConfigState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_gemini_info_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerGeminiConfigGet(): Promise<Result<GeminiConfigState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_codex_config_toml_set", { toml }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerGeminiInfoGet() : Promise<Result<SimpleCliInfo, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_gemini_config_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerGeminiConfigSet(
-    patch: GeminiConfigPatch
-  ): Promise<Result<GeminiConfigState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_gemini_info_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerGeminiConfigGet() : Promise<Result<GeminiConfigState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_gemini_config_set", { patch }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerGrokInfoGet(): Promise<Result<SimpleCliInfo, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_gemini_config_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerGeminiConfigSet(patch: GeminiConfigPatch) : Promise<Result<GeminiConfigState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_grok_info_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerGrokConfigGet(): Promise<Result<GrokConfigState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_gemini_config_set", { patch }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerGrokInfoGet() : Promise<Result<SimpleCliInfo, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_grok_config_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerGrokConfigSet(
-    preferences: GrokProxyPreferences
-  ): Promise<Result<GrokConfigState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_grok_info_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerGrokConfigGet() : Promise<Result<GrokConfigState, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_manager_grok_config_set", { preferences }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerClaudeEnvSet(
-    mcpTimeoutMs: number | null,
-    disableErrorReporting: boolean
-  ): Promise<Result<ClaudeEnvState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_grok_config_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerGrokConfigSet(preferences: GrokProxyPreferences) : Promise<Result<GrokConfigState, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_manager_claude_env_set", {
-          mcpTimeoutMs,
-          disableErrorReporting,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerClaudeSettingsGet(): Promise<Result<ClaudeSettingsState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_grok_config_set", { preferences }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerClaudeEnvSet(mcpTimeoutMs: number | null, disableErrorReporting: boolean) : Promise<Result<ClaudeEnvState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_settings_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerClaudeSettingsSet(
-    patch: ClaudeSettingsPatch
-  ): Promise<Result<ClaudeSettingsState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_env_set", { mcpTimeoutMs, disableErrorReporting }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerClaudeSettingsGet() : Promise<Result<ClaudeSettingsState, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_manager_claude_settings_set", { patch }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerClaudeHooksGet(): Promise<Result<ClaudeHooksState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_settings_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerClaudeSettingsSet(patch: ClaudeSettingsPatch) : Promise<Result<ClaudeSettingsState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_hooks_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliManagerClaudeHooksSet(
-    input: ClaudeHooksSetInput
-  ): Promise<Result<ClaudeHooksState, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_settings_set", { patch }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerClaudeHooksGet() : Promise<Result<ClaudeHooksState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_hooks_set", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliCheckLatestVersion(cliKey: string): Promise<Result<CliVersionCheck, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_hooks_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliManagerClaudeHooksSet(input: ClaudeHooksSetInput) : Promise<Result<ClaudeHooksState, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_check_latest_version", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliUpdate(cliKey: string): Promise<Result<CliUpdateResult, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_manager_claude_hooks_set", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliCheckLatestVersion(cliKey: string) : Promise<Result<CliVersionCheck, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_update", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayStart(preferredPort: number | null): Promise<Result<GatewayStatus, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_check_latest_version", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliUpdate(cliKey: string) : Promise<Result<CliUpdateResult, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("gateway_start", { preferredPort }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayStop(): Promise<Result<GatewayStatus, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("cli_update", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayStart(preferredPort: number | null) : Promise<Result<GatewayStatus, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("gateway_stop") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayStatus(): Promise<GatewayStatus> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_start", { preferredPort }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayStop() : Promise<Result<GatewayStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_stop") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayStatus() : Promise<GatewayStatus> {
     return await TAURI_INVOKE("gateway_status");
-  },
-  async gatewayCheckPortAvailable(port: number): Promise<Result<boolean, string>> {
+},
+async gatewayCheckPortAvailable(port: number) : Promise<Result<boolean, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("gateway_check_port_available", { port }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewaySessionsList(
-    limit: number | null
-  ): Promise<Result<GatewayActiveSessionSummary[], string>> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_check_port_available", { port }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewaySessionsList(limit: number | null) : Promise<Result<GatewayActiveSessionSummary[], string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("gateway_sessions_list", { limit }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayCircuitStatus(
-    cliKey: string
-  ): Promise<Result<GatewayProviderCircuitStatus[], string>> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_sessions_list", { limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayCircuitStatus(cliKey: string) : Promise<Result<GatewayProviderCircuitStatus[], string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("gateway_circuit_status", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayCircuitResetProvider(providerId: number): Promise<Result<boolean, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_circuit_status", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayCircuitResetProvider(providerId: number) : Promise<Result<boolean, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("gateway_circuit_reset_provider", { providerId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayCircuitResetCli(cliKey: string): Promise<Result<number, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_circuit_reset_provider", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayCircuitResetCli(cliKey: string) : Promise<Result<number, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("gateway_circuit_reset_cli", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayUpstreamProxyValidate(
-    input: GatewayUpstreamProxyInput
-  ): Promise<Result<null, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_circuit_reset_cli", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayUpstreamProxyValidate(input: GatewayUpstreamProxyInput) : Promise<Result<null, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("gateway_upstream_proxy_validate", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayUpstreamProxyTest(input: GatewayUpstreamProxyInput): Promise<Result<null, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_upstream_proxy_validate", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayUpstreamProxyTest(input: GatewayUpstreamProxyInput) : Promise<Result<null, string>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("gateway_upstream_proxy_test", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async gatewayUpstreamProxyDetectIp(
-    input: GatewayUpstreamProxyInput
-  ): Promise<Result<string, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_upstream_proxy_test", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async gatewayUpstreamProxyDetectIp(input: GatewayUpstreamProxyInput) : Promise<Result<string, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("gateway_upstream_proxy_detect_ip", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async wslDetect(): Promise<WslDetection> {
+    return { status: "ok", data: await TAURI_INVOKE("gateway_upstream_proxy_detect_ip", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async wslDetect() : Promise<WslDetection> {
     return await TAURI_INVOKE("wsl_detect");
-  },
-  async wslHostAddressGet(): Promise<string | null> {
+},
+async wslHostAddressGet() : Promise<string | null> {
     return await TAURI_INVOKE("wsl_host_address_get");
-  },
-  async wslConfigStatusGet(distros: string[] | null): Promise<WslDistroConfigStatus[]> {
+},
+async wslConfigStatusGet(distros: string[] | null) : Promise<WslDistroConfigStatus[]> {
     return await TAURI_INVOKE("wsl_config_status_get", { distros });
-  },
-  async wslConfigureClients(): Promise<Result<WslConfigureReport, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("wsl_configure_clients") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliSessionsProjectsList(
-    source: string,
-    wslDistro: string | null
-  ): Promise<Result<CliSessionsProjectSummary[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_sessions_projects_list", { source, wslDistro }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliSessionsSessionsList(
-    source: string,
-    projectId: string,
-    wslDistro: string | null
-  ): Promise<Result<CliSessionsSessionSummary[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_sessions_sessions_list", { source, projectId, wslDistro }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliSessionsMessagesGet(
-    source: string,
-    filePath: string,
-    page: number,
-    pageSize: number,
-    fromEnd: boolean | null,
-    wslDistro: string | null
-  ): Promise<Result<CliSessionsPaginatedMessages, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_sessions_messages_get", {
-          source,
-          filePath,
-          page,
-          pageSize,
-          fromEnd,
-          wslDistro,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliSessionsSessionDelete(
-    source: string,
-    filePaths: string[],
-    wslDistro: string | null
-  ): Promise<Result<string[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_sessions_session_delete", { source, filePaths, wslDistro }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providersList(cliKey: string): Promise<Result<ProviderSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("providers_list", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerUpsert(input: ProviderUpsertInput): Promise<Result<ProviderSummary, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("provider_upsert", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerDuplicate(providerId: number): Promise<Result<ProviderSummary, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("provider_duplicate", { providerId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerSetEnabled(
-    providerId: number,
-    enabled: boolean
-  ): Promise<Result<ProviderSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_set_enabled", { providerId, enabled }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerDelete(
-    providerId: number,
-    clearUsageStats: boolean
-  ): Promise<Result<boolean, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_delete", { providerId, clearUsageStats }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providersReorder(
-    cliKey: string,
-    orderedProviderIds: number[]
-  ): Promise<Result<ProviderSummary[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("providers_reorder", { cliKey, orderedProviderIds }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async defaultRouteProvidersList(cliKey: string): Promise<Result<ProviderRouteRow[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("default_route_providers_list", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async defaultRouteProvidersSetOrder(
-    cliKey: string,
-    orderedProviderIds: number[]
-  ): Promise<Result<ProviderRouteRow[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("default_route_providers_set_order", {
-          cliKey,
-          orderedProviderIds,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerClaudeTerminalLaunchCommand(providerId: number): Promise<Result<string, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_claude_terminal_launch_command", { providerId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerCopyApiKeyToClipboard(
-    providerId: number,
-    confirm: RiskyIpcConfirm | null
-  ): Promise<Result<boolean, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_copy_api_key_to_clipboard", { providerId, confirm }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async baseUrlPingMs(baseUrl: string): Promise<Result<number, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("base_url_ping_ms", { baseUrl }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerTestAvailability(
-    providerId: number,
-    model: string | null,
-    prompt: string | null
-  ): Promise<Result<ProviderAvailabilityResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_test_availability", { providerId, model, prompt }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerModelsDiscover(
-    input: ProviderModelDiscoveryInput
-  ): Promise<Result<ProviderModelDiscoveryResult, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("provider_models_discover", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthStartFlow(
-    cliKey: string,
-    providerId: number
-  ): Promise<Result<ProviderOAuthStartFlowResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_oauth_start_flow", { cliKey, providerId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthStartDeviceFlow(
-    providerId: number
-  ): Promise<Result<ProviderOAuthDeviceCodeStartResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_oauth_start_device_flow", { providerId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthPollDeviceFlow(
-    input: ProviderOAuthDeviceCodePollInput
-  ): Promise<Result<ProviderOAuthDeviceCodePollResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_oauth_poll_device_flow", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthCancelDeviceFlow(
-    flowId: string
-  ): Promise<Result<ProviderOAuthDeviceCodeCancelResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_oauth_cancel_device_flow", { flowId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthRefresh(
-    providerId: number
-  ): Promise<Result<ProviderOAuthRefreshResult, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("provider_oauth_refresh", { providerId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthDisconnect(
-    providerId: number
-  ): Promise<Result<ProviderOAuthDisconnectResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_oauth_disconnect", { providerId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthStatus(
-    providerId: number
-  ): Promise<Result<ProviderOAuthStatusResult, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("provider_oauth_status", { providerId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthFetchLimits(
-    providerId: number
-  ): Promise<Result<ProviderOAuthLimitsResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_oauth_fetch_limits", { providerId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerOauthResetCodexQuota(
-    providerId: number,
-    confirm: RiskyIpcConfirm | null
-  ): Promise<Result<ProviderOAuthResetCodexQuotaResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("provider_oauth_reset_codex_quota", { providerId, confirm }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async claudeProviderValidateModel(
-    providerId: number,
-    baseUrl: string,
-    requestJson: string
-  ): Promise<Result<ClaudeModelValidationResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("claude_provider_validate_model", {
-          providerId,
-          baseUrl,
-          requestJson,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async claudeValidationHistoryList(
-    providerId: number,
-    limit: number | null
-  ): Promise<Result<ClaudeModelValidationRunRow[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("claude_validation_history_list", { providerId, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async claudeValidationHistoryClearProvider(providerId: number): Promise<Result<boolean, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("claude_validation_history_clear_provider", { providerId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModesList(): Promise<Result<SortModeSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("sort_modes_list") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModeCreate(name: string): Promise<Result<SortModeSummary, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("sort_mode_create", { name }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModeRename(modeId: number, name: string): Promise<Result<SortModeSummary, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("sort_mode_rename", { modeId, name }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModeDelete(modeId: number): Promise<Result<boolean, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("sort_mode_delete", { modeId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModeActiveList(): Promise<Result<SortModeActiveRow[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("sort_mode_active_list") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModeActiveSet(
-    cliKey: string,
-    modeId: number | null
-  ): Promise<Result<SortModeActiveRow, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("sort_mode_active_set", { cliKey, modeId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModeProvidersList(
-    modeId: number,
-    cliKey: string
-  ): Promise<Result<SortModeProviderRow[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("sort_mode_providers_list", { modeId, cliKey }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModeProvidersSetOrder(
-    modeId: number,
-    cliKey: string,
-    orderedProviderIds: number[]
-  ): Promise<Result<SortModeProviderRow[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("sort_mode_providers_set_order", {
-          modeId,
-          cliKey,
-          orderedProviderIds,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async sortModeProviderSetEnabled(
-    modeId: number,
-    cliKey: string,
-    providerId: number,
-    enabled: boolean
-  ): Promise<Result<SortModeProviderRow, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("sort_mode_provider_set_enabled", {
-          modeId,
-          cliKey,
-          providerId,
-          enabled,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async modelPricesListAll(): Promise<Result<ModelPriceSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("model_prices_list_all") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async modelPriceUpsert(
-    cliKey: string,
-    model: string,
-    priceJson: string
-  ): Promise<Result<ModelPriceSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("model_price_upsert", { cliKey, model, priceJson }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async modelPricesSync(): Promise<Result<ModelPricesSyncReport, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("model_prices_sync") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async modelPriceAliasesGet(): Promise<Result<ModelPriceAliasesV1, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("model_price_aliases_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async modelPriceAliasesSet(
-    aliases: ModelPriceAliasesV1
-  ): Promise<Result<ModelPriceAliasesV1, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("model_price_aliases_set", { aliases }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async promptsList(workspaceId: number): Promise<Result<PromptSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("prompts_list", { workspaceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async promptsListSummary(workspaceId: number): Promise<Result<PromptListSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("prompts_list_summary", { workspaceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async promptsDefaultSyncFromFiles(): Promise<Result<DefaultPromptSyncReport, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("prompts_default_sync_from_files") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async promptUpsert(
-    promptId: number | null,
-    workspaceId: number,
-    name: string,
-    content: string,
-    enabled: boolean
-  ): Promise<Result<PromptSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("prompt_upsert", {
-          promptId,
-          workspaceId,
-          name,
-          content,
-          enabled,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async promptSetEnabled(
-    promptId: number,
-    enabled: boolean
-  ): Promise<Result<PromptSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("prompt_set_enabled", { promptId, enabled }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async promptDelete(promptId: number): Promise<Result<boolean, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("prompt_delete", { promptId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async mcpServersList(
-    input: McpServersListInput
-  ): Promise<Result<McpServerSummaryView[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("mcp_servers_list", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async mcpServerUpsert(
-    input: McpServerUpsertInput
-  ): Promise<Result<McpServerSummaryView, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("mcp_server_upsert", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async mcpServerSetEnabled(
-    input: McpServerEnabledInput
-  ): Promise<Result<McpServerSummaryView, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("mcp_server_set_enabled", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async mcpServerDelete(input: McpServerDeleteInput): Promise<Result<boolean, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("mcp_server_delete", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async mcpParseJson(input: McpParseJsonInput): Promise<Result<McpParseResult, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("mcp_parse_json", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async mcpImportServers(input: McpImportServersInput): Promise<Result<McpImportReport, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("mcp_import_servers", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async mcpImportFromWorkspaceCli(
-    input: McpImportFromWorkspaceCliInput
-  ): Promise<Result<McpImportReport, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("mcp_import_from_workspace_cli", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillReposList(): Promise<Result<SkillRepoSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skill_repos_list") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillRepoUpsert(
-    repoId: number | null,
-    gitUrl: string,
-    branch: string,
-    enabled: boolean
-  ): Promise<Result<SkillRepoSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skill_repo_upsert", { repoId, gitUrl, branch, enabled }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillRepoDelete(repoId: number): Promise<Result<boolean, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skill_repo_delete", { repoId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillsInstalledList(workspaceId: number): Promise<Result<InstalledSkillSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skills_installed_list", { workspaceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillsDiscoverAvailable(
-    refresh: boolean
-  ): Promise<Result<AvailableSkillSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skills_discover_available", { refresh }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillRepoDiscoverAvailable(
-    repoId: number,
-    refresh: boolean
-  ): Promise<Result<AvailableSkillSummary[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skill_repo_discover_available", { repoId, refresh }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillInstall(
-    workspaceId: number,
-    gitUrl: string,
-    branch: string,
-    sourceSubdir: string,
-    enabled: boolean
-  ): Promise<Result<InstalledSkillSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skill_install", {
-          workspaceId,
-          gitUrl,
-          branch,
-          sourceSubdir,
-          enabled,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillInstallToLocal(
-    workspaceId: number,
-    gitUrl: string,
-    branch: string,
-    sourceSubdir: string
-  ): Promise<Result<LocalSkillSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skill_install_to_local", {
-          workspaceId,
-          gitUrl,
-          branch,
-          sourceSubdir,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillSetEnabled(
-    workspaceId: number,
-    skillId: number,
-    enabled: boolean
-  ): Promise<Result<InstalledSkillSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skill_set_enabled", { workspaceId, skillId, enabled }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillUninstall(skillId: number): Promise<Result<boolean, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skill_uninstall", { skillId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillReturnToLocal(workspaceId: number, skillId: number): Promise<Result<boolean, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skill_return_to_local", { workspaceId, skillId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillsLocalList(workspaceId: number): Promise<Result<LocalSkillSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skills_local_list", { workspaceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillLocalDelete(
-    workspaceId: number,
-    dirName: string,
-    confirm: RiskyIpcConfirm | null
-  ): Promise<Result<boolean, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skill_local_delete", { workspaceId, dirName, confirm }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillImportLocal(
-    workspaceId: number,
-    dirName: string
-  ): Promise<Result<InstalledSkillSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skill_import_local", { workspaceId, dirName }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillsImportLocalBatch(
-    workspaceId: number,
-    dirNames: string[]
-  ): Promise<Result<SkillImportLocalBatchReport, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("skills_import_local_batch", { workspaceId, dirNames }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillsPathsGet(cliKey: string): Promise<Result<SkillsPaths, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skills_paths_get", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillCheckUpdates(workspaceId: number): Promise<Result<SkillUpdateInfo[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skill_check_updates", { workspaceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async skillUpdate(
-    workspaceId: number,
-    skillId: number
-  ): Promise<Result<InstalledSkillSummary, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("skill_update", { workspaceId, skillId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginList(): Promise<Result<PluginSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_list") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginGet(input: PluginGetInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_get", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginActiveContributions(): Promise<Result<ActiveContributionSnapshot, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_active_contributions") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginExecuteCommand(input: PluginExecuteCommandInput): Promise<Result<JsonValue, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_execute_command", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginPreviewFromFile(
-    input: PluginPreviewFromFileInput
-  ): Promise<Result<PluginInstallPreview, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_preview_from_file", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginPreviewUpdateFromFile(
-    input: PluginPreviewUpdateFromFileInput
-  ): Promise<Result<PluginUpdateDiff, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("plugin_preview_update_from_file", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginPreviewRemoteUpdate(
-    input: PluginInstallRemoteInput
-  ): Promise<Result<PluginUpdateDiff, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_preview_remote_update", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginInstallFromFile(
-    input: PluginInstallFromFileInput
-  ): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_install_from_file", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginUpdateFromFile(
-    input: PluginInstallFromFileInput
-  ): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_update_from_file", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginRollback(input: PluginRollbackInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_rollback", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginParseMarketIndex(
-    input: PluginMarketIndexInput
-  ): Promise<Result<PluginMarketListing[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_parse_market_index", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginInstallRemote(
-    input: PluginInstallRemoteInput
-  ): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_install_remote", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginUpdateRemote(input: PluginInstallRemoteInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_update_remote", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginInstallOfficial(input: PluginGetInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_install_official", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginQuarantineRevoked(input: PluginGetInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_quarantine_revoked", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginEnable(input: PluginGetInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_enable", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginDisable(input: PluginGetInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_disable", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginUninstall(input: PluginGetInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_uninstall", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginSaveConfig(input: PluginSaveConfigInput): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_save_config", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginGrantPermissions(
-    input: PluginGrantPermissionsInput
-  ): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_grant_permissions", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginRevokePermission(
-    input: PluginRevokePermissionInput
-  ): Promise<Result<PluginDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_revoke_permission", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginListAuditLogs(
-    input: PluginListAuditLogsInput
-  ): Promise<Result<PluginAuditLog[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_list_audit_logs", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginListRuntimeReports(
-    input: PluginListRuntimeReportsInput
-  ): Promise<Result<PluginHookExecutionReport[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_list_runtime_reports", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginListExtensionRuntimeReports(
-    input: PluginListExtensionRuntimeReportsInput
-  ): Promise<Result<PluginExtensionExecutionReport[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("plugin_list_extension_runtime_reports", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async pluginExportReplayFixture(
-    input: PluginExportReplayFixtureInput
-  ): Promise<Result<PluginReplayFixture, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("plugin_export_replay_fixture", { input }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async requestLogsList(
-    cliKey: string,
-    limit: number | null
-  ): Promise<Result<RequestLogSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("request_logs_list", { cliKey, limit }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async requestLogsListAll(limit: number | null): Promise<Result<RequestLogSummary[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("request_logs_list_all", { limit }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async requestLogsListAfterId(
-    cliKey: string,
-    afterId: number,
-    limit: number | null
-  ): Promise<Result<RequestLogSummary[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("request_logs_list_after_id", { cliKey, afterId, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async requestLogsListAfterIdAll(
-    afterId: number,
-    limit: number | null
-  ): Promise<Result<RequestLogSummary[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("request_logs_list_after_id_all", { afterId, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async requestLogGet(logId: number): Promise<Result<RequestLogDetail, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("request_log_get", { logId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async requestLogGetByTraceId(traceId: string): Promise<Result<RequestLogDetail | null, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("request_log_get_by_trace_id", { traceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async requestAttemptLogsByTraceId(
-    traceId: string,
-    limit: number | null
-  ): Promise<Result<RequestAttemptLog[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("request_attempt_logs_by_trace_id", { traceId, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async activeRequestLogsSnapshot(): Promise<Result<ActiveRequestSnapshotItem[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("active_request_logs_snapshot") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliSessionsFolderLookupByIds(
-    items: CliSessionsFolderLookupInput[],
-    wslDistro: string | null
-  ): Promise<Result<CliSessionsFolderLookupEntry[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_sessions_folder_lookup_by_ids", { items, wslDistro }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async dbDiskUsageGet(): Promise<Result<DbDiskUsage, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("db_disk_usage_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async dbCompact(): Promise<Result<DbCompactResult, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("db_compact") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async requestLogsClearAll(): Promise<Result<ClearRequestLogsResult, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("request_logs_clear_all") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async appDataReset(confirm: RiskyIpcConfirm | null): Promise<Result<boolean, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("app_data_reset", { confirm }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageSummary(range: string, cliKey: string | null): Promise<Result<UsageSummary, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("usage_summary", { range, cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageSummaryV2(params: UsageQueryParams): Promise<Result<UsageSummary, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("usage_summary_v2", { params }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageLeaderboardProvider(
-    range: string,
-    cliKey: string | null,
-    limit: number | null
-  ): Promise<Result<UsageProviderRow[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("usage_leaderboard_provider", { range, cliKey, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageLeaderboardDay(
-    range: string,
-    cliKey: string | null,
-    limit: number | null
-  ): Promise<Result<UsageDayRow[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("usage_leaderboard_day", { range, cliKey, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageLeaderboardV2(
-    scope: string,
-    params: UsageQueryParams,
-    limit: number | null
-  ): Promise<Result<UsageLeaderboardRow[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("usage_leaderboard_v2", { scope, params, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageLeaderboardCsvExport(filePath: string, csv: string): Promise<Result<boolean, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("usage_leaderboard_csv_export", { filePath, csv }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageHourlySeries(days: number): Promise<Result<UsageHourlyRow[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("usage_hourly_series", { days }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageDayDetailV1(params: UsageDayDetailParams): Promise<Result<UsageDayDetailV1, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("usage_day_detail_v1", { params }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageFolderOptionsV1(
-    params: UsageQueryParams
-  ): Promise<Result<UsageFolderOptionV1[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("usage_folder_options_v1", { params }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageProviderCacheRateTrendV1(
-    params: UsageQueryParams,
-    limit: number | null
-  ): Promise<Result<UsageProviderCacheRateTrendRowV1[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("usage_provider_cache_rate_trend_v1", { params, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async usageProviderMetricsTrendV1(
-    params: UsageQueryParams,
-    limit: number | null
-  ): Promise<Result<UsageProviderMetricsTrendRowV1[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("usage_provider_metrics_trend_v1", { params, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenConfigGet(adapterId: string): Promise<Result<ImageGenConfigView, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_config_get", { adapterId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenConfigSet(
-    adapterId: string,
-    baseUrl: string,
-    model: string,
-    apiKey: string | null
-  ): Promise<Result<ImageGenConfigView, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("image_gen_config_set", { adapterId, baseUrl, model, apiKey }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenPostJson(
-    adapterId: string,
-    path: string,
-    body: JsonValue,
-    timeoutSecs: number | null
-  ): Promise<Result<ImageGenHttpResponse, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("image_gen_post_json", { adapterId, path, body, timeoutSecs }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenPostMultipart(
-    adapterId: string,
-    path: string,
-    fields: [string, string][],
-    files: ImageGenMultipartFile[],
-    timeoutSecs: number | null
-  ): Promise<Result<ImageGenHttpResponse, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("image_gen_post_multipart", {
-          adapterId,
-          path,
-          fields,
-          files,
-          timeoutSecs,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenFetchImage(
-    url: string,
-    timeoutSecs: number | null
-  ): Promise<Result<ImageGenFetchedImage, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("image_gen_fetch_image", { url, timeoutSecs }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenSaveImage(path: string, dataB64: string): Promise<Result<boolean, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_save_image", { path, dataB64 }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenTaskPersist(
-    payload: ImageGenTaskPersistPayload
-  ): Promise<Result<ImageGenTaskRow, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_task_persist", { payload }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenTasksList(
-    beforeCreatedAt: number | null,
-    limit: number
-  ): Promise<Result<ImageGenTaskRow[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("image_gen_tasks_list", { beforeCreatedAt, limit }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenTaskDelete(id: string): Promise<Result<null, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_task_delete", { id }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenTasksClear(): Promise<Result<number, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_tasks_clear") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenReadImage(path: string): Promise<Result<ImageGenFetchedImage, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_read_image", { path }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenStorageGet(): Promise<Result<ImageGenStorageView, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_storage_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenStorageSetDir(dir: string): Promise<Result<ImageGenStorageView, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_storage_set_dir", { dir }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async imageGenStorageCleanup(keepCount: number): Promise<Result<number, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("image_gen_storage_cleanup", { keepCount }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async envConflictsCheck(cliKey: string): Promise<Result<EnvConflict[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("env_conflicts_check", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliProxyStatusAll(): Promise<Result<CliProxyStatus[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_proxy_status_all") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliProxySetEnabled(
-    cliKey: string,
-    enabled: boolean
-  ): Promise<Result<CliProxyResult, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_proxy_set_enabled", { cliKey, enabled }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliProxySyncEnabled(
-    baseOrigin: string,
-    applyLive: boolean | null
-  ): Promise<Result<CliProxyResult[], string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("cli_proxy_sync_enabled", { baseOrigin, applyLive }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async cliProxyRebindCodexHome(): Promise<Result<CliProxyResult, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("cli_proxy_rebind_codex_home") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async providerLimitUsageV1(
-    cliKey: string | null
-  ): Promise<Result<ProviderLimitUsageRow[], string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("provider_limit_usage_v1", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async workspacesList(cliKey: string): Promise<Result<WorkspacesListResult, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("workspaces_list", { cliKey }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async workspaceCreate(
-    cliKey: string,
-    name: string,
-    cloneFromActive: boolean | null
-  ): Promise<Result<WorkspaceSummary, string>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("workspace_create", { cliKey, name, cloneFromActive }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async workspaceRename(
-    workspaceId: number,
-    name: string
-  ): Promise<Result<WorkspaceSummary, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("workspace_rename", { workspaceId, name }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async workspaceDelete(workspaceId: number): Promise<Result<boolean, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("workspace_delete", { workspaceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async workspacePreview(workspaceId: number): Promise<Result<WorkspacePreview, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("workspace_preview", { workspaceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async workspaceApply(workspaceId: number): Promise<Result<WorkspaceApplyReport, string>> {
-    try {
-      return { status: "ok", data: await TAURI_INVOKE("workspace_apply", { workspaceId }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-};
+},
+async wslConfigureClients() : Promise<Result<WslConfigureReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("wsl_configure_clients") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliSessionsProjectsList(source: string, wslDistro: string | null) : Promise<Result<CliSessionsProjectSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_sessions_projects_list", { source, wslDistro }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliSessionsSessionsList(source: string, projectId: string, wslDistro: string | null) : Promise<Result<CliSessionsSessionSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_sessions_sessions_list", { source, projectId, wslDistro }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliSessionsMessagesGet(source: string, filePath: string, page: number, pageSize: number, fromEnd: boolean | null, wslDistro: string | null) : Promise<Result<CliSessionsPaginatedMessages, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_sessions_messages_get", { source, filePath, page, pageSize, fromEnd, wslDistro }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliSessionsSessionDelete(source: string, filePaths: string[], wslDistro: string | null) : Promise<Result<string[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_sessions_session_delete", { source, filePaths, wslDistro }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providersList(cliKey: string) : Promise<Result<ProviderSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("providers_list", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerUpsert(input: ProviderUpsertInput) : Promise<Result<ProviderSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_upsert", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerDuplicate(providerId: number) : Promise<Result<ProviderSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_duplicate", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerSetEnabled(providerId: number, enabled: boolean) : Promise<Result<ProviderSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_set_enabled", { providerId, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerDelete(providerId: number, clearUsageStats: boolean) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_delete", { providerId, clearUsageStats }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providersReorder(cliKey: string, orderedProviderIds: number[]) : Promise<Result<ProviderSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("providers_reorder", { cliKey, orderedProviderIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async defaultRouteProvidersList(cliKey: string) : Promise<Result<ProviderRouteRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("default_route_providers_list", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async defaultRouteProvidersSetOrder(cliKey: string, orderedProviderIds: number[]) : Promise<Result<ProviderRouteRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("default_route_providers_set_order", { cliKey, orderedProviderIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerClaudeTerminalLaunchCommand(providerId: number) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_claude_terminal_launch_command", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerCopyApiKeyToClipboard(providerId: number, confirm: RiskyIpcConfirm | null) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_copy_api_key_to_clipboard", { providerId, confirm }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async baseUrlPingMs(baseUrl: string) : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("base_url_ping_ms", { baseUrl }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerTestAvailability(providerId: number, model: string | null, prompt: string | null) : Promise<Result<ProviderAvailabilityResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_test_availability", { providerId, model, prompt }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerModelsDiscover(input: ProviderModelDiscoveryInput) : Promise<Result<ProviderModelDiscoveryResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_models_discover", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthStartFlow(cliKey: string, providerId: number) : Promise<Result<ProviderOAuthStartFlowResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_start_flow", { cliKey, providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthStartDeviceFlow(providerId: number) : Promise<Result<ProviderOAuthDeviceCodeStartResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_start_device_flow", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthPollDeviceFlow(input: ProviderOAuthDeviceCodePollInput) : Promise<Result<ProviderOAuthDeviceCodePollResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_poll_device_flow", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthCancelDeviceFlow(flowId: string) : Promise<Result<ProviderOAuthDeviceCodeCancelResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_cancel_device_flow", { flowId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthRefresh(providerId: number) : Promise<Result<ProviderOAuthRefreshResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_refresh", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthDisconnect(providerId: number) : Promise<Result<ProviderOAuthDisconnectResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_disconnect", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthStatus(providerId: number) : Promise<Result<ProviderOAuthStatusResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_status", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthFetchLimits(providerId: number) : Promise<Result<ProviderOAuthLimitsResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_fetch_limits", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerOauthResetCodexQuota(providerId: number, confirm: RiskyIpcConfirm | null) : Promise<Result<ProviderOAuthResetCodexQuotaResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_oauth_reset_codex_quota", { providerId, confirm }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async claudeProviderValidateModel(providerId: number, baseUrl: string, requestJson: string) : Promise<Result<ClaudeModelValidationResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("claude_provider_validate_model", { providerId, baseUrl, requestJson }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async claudeValidationHistoryList(providerId: number, limit: number | null) : Promise<Result<ClaudeModelValidationRunRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("claude_validation_history_list", { providerId, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async claudeValidationHistoryClearProvider(providerId: number) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("claude_validation_history_clear_provider", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModesList() : Promise<Result<SortModeSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_modes_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModeCreate(name: string) : Promise<Result<SortModeSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_mode_create", { name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModeRename(modeId: number, name: string) : Promise<Result<SortModeSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_mode_rename", { modeId, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModeDelete(modeId: number) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_mode_delete", { modeId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModeActiveList() : Promise<Result<SortModeActiveRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_mode_active_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModeActiveSet(cliKey: string, modeId: number | null) : Promise<Result<SortModeActiveRow, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_mode_active_set", { cliKey, modeId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModeProvidersList(modeId: number, cliKey: string) : Promise<Result<SortModeProviderRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_mode_providers_list", { modeId, cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModeProvidersSetOrder(modeId: number, cliKey: string, orderedProviderIds: number[]) : Promise<Result<SortModeProviderRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_mode_providers_set_order", { modeId, cliKey, orderedProviderIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async sortModeProviderSetEnabled(modeId: number, cliKey: string, providerId: number, enabled: boolean) : Promise<Result<SortModeProviderRow, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sort_mode_provider_set_enabled", { modeId, cliKey, providerId, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelCatalogList(cliKey: string) : Promise<Result<ModelCatalogResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_catalog_list", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelCatalogUpdate(input: ModelCatalogUpdateInput) : Promise<Result<ModelCatalogItem, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_catalog_update", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelCatalogSetEnabled(input: ModelCatalogSetEnabledInput) : Promise<Result<ModelCatalogItem, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_catalog_set_enabled", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelCatalogRefreshPreview(cliKey: string) : Promise<Result<ModelCatalogRefreshPreview, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_catalog_refresh_preview", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelCatalogRefreshApply(input: ModelCatalogApplyInput) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_catalog_refresh_apply", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelCatalogExportDefaultProvider(cliKey: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_catalog_export_default_provider", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelCatalogExportPi(cliKey: string, providerName: string) : Promise<Result<CliModelExportResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_catalog_export_pi", { cliKey, providerName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelCatalogExportOpencode(cliKey: string, providerName: string) : Promise<Result<CliModelExportResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_catalog_export_opencode", { cliKey, providerName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelPricesListAll() : Promise<Result<ModelPriceSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_prices_list_all") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelPriceUpsert(cliKey: string, model: string, priceJson: string) : Promise<Result<ModelPriceSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_price_upsert", { cliKey, model, priceJson }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelPricesSync() : Promise<Result<ModelPricesSyncReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_prices_sync") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelPriceAliasesGet() : Promise<Result<ModelPriceAliasesV1, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_price_aliases_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async modelPriceAliasesSet(aliases: ModelPriceAliasesV1) : Promise<Result<ModelPriceAliasesV1, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("model_price_aliases_set", { aliases }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async promptsList(workspaceId: number) : Promise<Result<PromptSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("prompts_list", { workspaceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async promptsListSummary(workspaceId: number) : Promise<Result<PromptListSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("prompts_list_summary", { workspaceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async promptsDefaultSyncFromFiles() : Promise<Result<DefaultPromptSyncReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("prompts_default_sync_from_files") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async promptUpsert(promptId: number | null, workspaceId: number, name: string, content: string, enabled: boolean) : Promise<Result<PromptSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("prompt_upsert", { promptId, workspaceId, name, content, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async promptSetEnabled(promptId: number, enabled: boolean) : Promise<Result<PromptSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("prompt_set_enabled", { promptId, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async promptDelete(promptId: number) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("prompt_delete", { promptId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async mcpServersList(input: McpServersListInput) : Promise<Result<McpServerSummaryView[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("mcp_servers_list", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async mcpServerUpsert(input: McpServerUpsertInput) : Promise<Result<McpServerSummaryView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("mcp_server_upsert", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async mcpServerSetEnabled(input: McpServerEnabledInput) : Promise<Result<McpServerSummaryView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("mcp_server_set_enabled", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async mcpServerDelete(input: McpServerDeleteInput) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("mcp_server_delete", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async mcpParseJson(input: McpParseJsonInput) : Promise<Result<McpParseResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("mcp_parse_json", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async mcpImportServers(input: McpImportServersInput) : Promise<Result<McpImportReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("mcp_import_servers", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async mcpImportFromWorkspaceCli(input: McpImportFromWorkspaceCliInput) : Promise<Result<McpImportReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("mcp_import_from_workspace_cli", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillReposList() : Promise<Result<SkillRepoSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_repos_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillRepoUpsert(repoId: number | null, gitUrl: string, branch: string, enabled: boolean) : Promise<Result<SkillRepoSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_repo_upsert", { repoId, gitUrl, branch, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillRepoDelete(repoId: number) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_repo_delete", { repoId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillsInstalledList(workspaceId: number) : Promise<Result<InstalledSkillSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skills_installed_list", { workspaceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillsDiscoverAvailable(refresh: boolean) : Promise<Result<AvailableSkillSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skills_discover_available", { refresh }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillRepoDiscoverAvailable(repoId: number, refresh: boolean) : Promise<Result<AvailableSkillSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_repo_discover_available", { repoId, refresh }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillInstall(workspaceId: number, gitUrl: string, branch: string, sourceSubdir: string, enabled: boolean) : Promise<Result<InstalledSkillSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_install", { workspaceId, gitUrl, branch, sourceSubdir, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillInstallToLocal(workspaceId: number, gitUrl: string, branch: string, sourceSubdir: string) : Promise<Result<LocalSkillSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_install_to_local", { workspaceId, gitUrl, branch, sourceSubdir }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillSetEnabled(workspaceId: number, skillId: number, enabled: boolean) : Promise<Result<InstalledSkillSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_set_enabled", { workspaceId, skillId, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillUninstall(skillId: number) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_uninstall", { skillId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillReturnToLocal(workspaceId: number, skillId: number) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_return_to_local", { workspaceId, skillId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillsLocalList(workspaceId: number) : Promise<Result<LocalSkillSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skills_local_list", { workspaceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillLocalDelete(workspaceId: number, dirName: string, confirm: RiskyIpcConfirm | null) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_local_delete", { workspaceId, dirName, confirm }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillImportLocal(workspaceId: number, dirName: string) : Promise<Result<InstalledSkillSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_import_local", { workspaceId, dirName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillsImportLocalBatch(workspaceId: number, dirNames: string[]) : Promise<Result<SkillImportLocalBatchReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skills_import_local_batch", { workspaceId, dirNames }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillsPathsGet(cliKey: string) : Promise<Result<SkillsPaths, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skills_paths_get", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillCheckUpdates(workspaceId: number) : Promise<Result<SkillUpdateInfo[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_check_updates", { workspaceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async skillUpdate(workspaceId: number, skillId: number) : Promise<Result<InstalledSkillSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("skill_update", { workspaceId, skillId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginList() : Promise<Result<PluginSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginGet(input: PluginGetInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_get", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginActiveContributions() : Promise<Result<ActiveContributionSnapshot, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_active_contributions") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginExecuteCommand(input: PluginExecuteCommandInput) : Promise<Result<JsonValue, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_execute_command", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginPreviewFromFile(input: PluginPreviewFromFileInput) : Promise<Result<PluginInstallPreview, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_preview_from_file", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginPreviewUpdateFromFile(input: PluginPreviewUpdateFromFileInput) : Promise<Result<PluginUpdateDiff, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_preview_update_from_file", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginPreviewRemoteUpdate(input: PluginInstallRemoteInput) : Promise<Result<PluginUpdateDiff, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_preview_remote_update", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginInstallFromFile(input: PluginInstallFromFileInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_install_from_file", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginUpdateFromFile(input: PluginInstallFromFileInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_update_from_file", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginRollback(input: PluginRollbackInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_rollback", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginParseMarketIndex(input: PluginMarketIndexInput) : Promise<Result<PluginMarketListing[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_parse_market_index", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginInstallRemote(input: PluginInstallRemoteInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_install_remote", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginUpdateRemote(input: PluginInstallRemoteInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_update_remote", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginInstallOfficial(input: PluginGetInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_install_official", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginQuarantineRevoked(input: PluginGetInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_quarantine_revoked", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginEnable(input: PluginGetInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_enable", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginDisable(input: PluginGetInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_disable", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginUninstall(input: PluginGetInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_uninstall", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginSaveConfig(input: PluginSaveConfigInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_save_config", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginGrantPermissions(input: PluginGrantPermissionsInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_grant_permissions", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginRevokePermission(input: PluginRevokePermissionInput) : Promise<Result<PluginDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_revoke_permission", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginListAuditLogs(input: PluginListAuditLogsInput) : Promise<Result<PluginAuditLog[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_list_audit_logs", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginListRuntimeReports(input: PluginListRuntimeReportsInput) : Promise<Result<PluginHookExecutionReport[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_list_runtime_reports", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginListExtensionRuntimeReports(input: PluginListExtensionRuntimeReportsInput) : Promise<Result<PluginExtensionExecutionReport[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_list_extension_runtime_reports", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async pluginExportReplayFixture(input: PluginExportReplayFixtureInput) : Promise<Result<PluginReplayFixture, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin_export_replay_fixture", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async requestLogsList(cliKey: string, limit: number | null) : Promise<Result<RequestLogSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_logs_list", { cliKey, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async requestLogsListAll(limit: number | null) : Promise<Result<RequestLogSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_logs_list_all", { limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async requestLogsListAfterId(cliKey: string, afterId: number, limit: number | null) : Promise<Result<RequestLogSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_logs_list_after_id", { cliKey, afterId, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async requestLogsListAfterIdAll(afterId: number, limit: number | null) : Promise<Result<RequestLogSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_logs_list_after_id_all", { afterId, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async requestLogGet(logId: number) : Promise<Result<RequestLogDetail, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_log_get", { logId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async requestLogGetByTraceId(traceId: string) : Promise<Result<RequestLogDetail | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_log_get_by_trace_id", { traceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async requestAttemptLogsByTraceId(traceId: string, limit: number | null) : Promise<Result<RequestAttemptLog[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_attempt_logs_by_trace_id", { traceId, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async activeRequestLogsSnapshot() : Promise<Result<ActiveRequestSnapshotItem[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("active_request_logs_snapshot") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliSessionsFolderLookupByIds(items: CliSessionsFolderLookupInput[], wslDistro: string | null) : Promise<Result<CliSessionsFolderLookupEntry[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_sessions_folder_lookup_by_ids", { items, wslDistro }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async dbDiskUsageGet() : Promise<Result<DbDiskUsage, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("db_disk_usage_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async dbCompact() : Promise<Result<DbCompactResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("db_compact") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async requestLogsClearAll() : Promise<Result<ClearRequestLogsResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_logs_clear_all") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async appDataReset(confirm: RiskyIpcConfirm | null) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("app_data_reset", { confirm }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageSummary(range: string, cliKey: string | null) : Promise<Result<UsageSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_summary", { range, cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageSummaryV2(params: UsageQueryParams) : Promise<Result<UsageSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_summary_v2", { params }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageLeaderboardProvider(range: string, cliKey: string | null, limit: number | null) : Promise<Result<UsageProviderRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_leaderboard_provider", { range, cliKey, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageLeaderboardDay(range: string, cliKey: string | null, limit: number | null) : Promise<Result<UsageDayRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_leaderboard_day", { range, cliKey, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageLeaderboardV2(scope: string, params: UsageQueryParams, limit: number | null) : Promise<Result<UsageLeaderboardRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_leaderboard_v2", { scope, params, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageLeaderboardCsvExport(filePath: string, csv: string) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_leaderboard_csv_export", { filePath, csv }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageHourlySeries(days: number) : Promise<Result<UsageHourlyRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_hourly_series", { days }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageDayDetailV1(params: UsageDayDetailParams) : Promise<Result<UsageDayDetailV1, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_day_detail_v1", { params }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageFolderOptionsV1(params: UsageQueryParams) : Promise<Result<UsageFolderOptionV1[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_folder_options_v1", { params }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageProviderCacheRateTrendV1(params: UsageQueryParams, limit: number | null) : Promise<Result<UsageProviderCacheRateTrendRowV1[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_provider_cache_rate_trend_v1", { params, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async usageProviderMetricsTrendV1(params: UsageQueryParams, limit: number | null) : Promise<Result<UsageProviderMetricsTrendRowV1[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("usage_provider_metrics_trend_v1", { params, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenConfigGet(adapterId: string) : Promise<Result<ImageGenConfigView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_config_get", { adapterId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenConfigSet(adapterId: string, baseUrl: string, model: string, apiKey: string | null) : Promise<Result<ImageGenConfigView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_config_set", { adapterId, baseUrl, model, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenPostJson(adapterId: string, path: string, body: JsonValue, timeoutSecs: number | null) : Promise<Result<ImageGenHttpResponse, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_post_json", { adapterId, path, body, timeoutSecs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenPostMultipart(adapterId: string, path: string, fields: ([string, string])[], files: ImageGenMultipartFile[], timeoutSecs: number | null) : Promise<Result<ImageGenHttpResponse, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_post_multipart", { adapterId, path, fields, files, timeoutSecs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenFetchImage(url: string, timeoutSecs: number | null) : Promise<Result<ImageGenFetchedImage, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_fetch_image", { url, timeoutSecs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenSaveImage(path: string, dataB64: string) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_save_image", { path, dataB64 }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenTaskPersist(payload: ImageGenTaskPersistPayload) : Promise<Result<ImageGenTaskRow, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_task_persist", { payload }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenTasksList(beforeCreatedAt: number | null, limit: number) : Promise<Result<ImageGenTaskRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_tasks_list", { beforeCreatedAt, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenTaskDelete(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_task_delete", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenTasksClear() : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_tasks_clear") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenReadImage(path: string) : Promise<Result<ImageGenFetchedImage, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_read_image", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenStorageGet() : Promise<Result<ImageGenStorageView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_storage_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenStorageSetDir(dir: string) : Promise<Result<ImageGenStorageView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_storage_set_dir", { dir }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async imageGenStorageCleanup(keepCount: number) : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("image_gen_storage_cleanup", { keepCount }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async envConflictsCheck(cliKey: string) : Promise<Result<EnvConflict[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("env_conflicts_check", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliProxyStatusAll() : Promise<Result<CliProxyStatus[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_proxy_status_all") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliProxySetEnabled(cliKey: string, enabled: boolean) : Promise<Result<CliProxyResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_proxy_set_enabled", { cliKey, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliProxySyncEnabled(baseOrigin: string, applyLive: boolean | null) : Promise<Result<CliProxyResult[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_proxy_sync_enabled", { baseOrigin, applyLive }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async cliProxyRebindCodexHome() : Promise<Result<CliProxyResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cli_proxy_rebind_codex_home") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async providerLimitUsageV1(cliKey: string | null) : Promise<Result<ProviderLimitUsageRow[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("provider_limit_usage_v1", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async workspacesList(cliKey: string) : Promise<Result<WorkspacesListResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("workspaces_list", { cliKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async workspaceCreate(cliKey: string, name: string, cloneFromActive: boolean | null) : Promise<Result<WorkspaceSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("workspace_create", { cliKey, name, cloneFromActive }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async workspaceRename(workspaceId: number, name: string) : Promise<Result<WorkspaceSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("workspace_rename", { workspaceId, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async workspaceDelete(workspaceId: number) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("workspace_delete", { workspaceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async workspacePreview(workspaceId: number) : Promise<Result<WorkspacePreview, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("workspace_preview", { workspaceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
+async workspaceApply(workspaceId: number) : Promise<Result<WorkspaceApplyReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("workspace_apply", { workspaceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+}
+}
 
 /** user-defined events **/
 
+
+
 /** user-defined constants **/
+
+
 
 /** user-defined types **/
 
-export type ActiveCommandContribution = {
-  pluginId: string;
-  command: string;
-  title: string;
-  category: string | null;
-};
-export type ActiveContributionSnapshot = {
-  ui: ActiveUiContribution[];
-  providers: ActiveProviderContribution[];
-  protocols: ActiveProtocolContribution[];
-  protocolBridges: ActiveProtocolBridgeContribution[];
-  commands: ActiveCommandContribution[];
-  gatewayHooks: ActiveGatewayHookContribution[];
-};
-export type ActiveGatewayHookContribution = {
-  pluginId: string;
-  name: string;
-  priority: number;
-  failurePolicy: string | null;
-  timeoutMs?: number | null;
-};
-export type ActiveProtocolBridgeContribution = {
-  pluginId: string;
-  contributionId: string;
-  bridgeType: string;
-  inboundProtocol: string;
-  outboundProtocol: string;
-  supportsStreaming: boolean | null;
-};
-export type ActiveProtocolContribution = {
-  pluginId: string;
-  protocolId: string;
-  direction: ProtocolDirection;
-};
-export type ActiveProviderContribution = {
-  pluginId: string;
-  providerType: string;
-  displayName: string;
-  targetCliKeys: TargetCliKey[];
-  extensionNamespace: string;
-};
-export type ActiveRequestSnapshotItem = {
-  trace_id: string;
-  cli_key: string;
-  method: string;
-  path: string;
-  query: string | null;
-  session_id: string | null;
-  requested_model: string | null;
-  created_at_ms: number;
-  last_activity_ms: number;
-  current_attempt: GatewayAttemptEvent | null;
-};
-export type ActiveUiContribution = {
-  pluginId: string;
-  contributionId: string;
-  providerExtensionNamespace: string | null;
-  slotId: string;
-  title: string | null;
-  order: number;
-  schema: JsonValue;
-};
-export type AppAboutInfo = {
-  os: string;
-  arch: string;
-  profile: string;
-  app_version: string;
-  bundle_type: string | null;
-  run_mode: string;
-};
-export type AppMemoryDiagnosticsCliSessionStats = {
-  source: string;
-  root: string;
-  exists: boolean;
-  file_count: number;
-  total_bytes: number;
-  max_file_bytes: number;
-  truncated: boolean;
-  top_files: AppMemoryDiagnosticsFileStat[];
-};
-export type AppMemoryDiagnosticsDbStats = {
-  path: string;
-  exists: boolean;
-  db_bytes: number;
-  wal_bytes: number;
-  shm_bytes: number;
-};
-export type AppMemoryDiagnosticsFileStat = {
-  path: string;
-  bytes: number;
-  modified_at: number | null;
-};
-export type AppMemoryDiagnosticsPromptStats = {
-  count: number;
-  total_content_len: number;
-  max_content_len: number;
-  top_items: AppMemoryDiagnosticsPromptTopItem[];
-};
-export type AppMemoryDiagnosticsPromptTopItem = {
-  id: number;
-  workspace_id: number;
-  cli_key: string;
-  name: string;
-  enabled: boolean;
-  content_len: number;
-};
-export type AppMemoryDiagnosticsSnapshot = {
-  generated_at_unix: number;
-  app_data_dir: string;
-  db: AppMemoryDiagnosticsDbStats;
-  prompt_stats: AppMemoryDiagnosticsPromptStats;
-  cli_sessions: AppMemoryDiagnosticsCliSessionStats[];
-};
-export type AppStartupStage =
-  | "idle"
-  | "initializing_db"
-  | "reading_settings"
-  | "starting_gateway"
-  | "syncing_cli_proxy"
-  | "finalizing_wsl"
-  | "ready"
-  | "failed";
-export type AppStartupStatus = {
-  running: boolean;
-  currentStage: AppStartupStage;
-  failedStage: AppStartupStage | null;
-  errorMessage: string | null;
-  canRetry: boolean;
-};
-export type AvailableSkillSummary = {
-  name: string;
-  description: string;
-  source_git_url: string;
-  source_branch: string;
-  source_subdir: string;
-  installed: boolean;
-};
-export type CircuitBreakerNoticeUpdate = { enableCircuitBreakerNotice: boolean };
-export type ClaudeCliInfo = {
-  found: boolean;
-  executable_path: string | null;
-  version: string | null;
-  error: string | null;
-  shell: string | null;
-  resolved_via: string;
-  config_dir: string;
-  settings_path: string;
-  mcp_timeout_ms: number | null;
-  disable_error_reporting: boolean;
-};
-export type ClaudeEnvState = {
-  config_dir: string;
-  settings_path: string;
-  mcp_timeout_ms: number | null;
-  disable_error_reporting: boolean;
-};
-export type ClaudeHookEntry = { hook_type: string; command: string; timeout?: number | null };
-export type ClaudeHookGroup = { event: string; matcher: string; hooks: ClaudeHookEntry[] };
-export type ClaudeHooksSetInput = { groups: ClaudeHookGroup[] };
-export type ClaudeHooksState = { settings_path: string; groups: ClaudeHookGroup[] };
-export type ClaudeModelMapping = {
-  requestedModel: string;
-  effectiveModel: string;
-  mappingKind: string;
-  providerId: number;
-  providerName: string;
-  applied: boolean;
-};
-export type ClaudeModelValidationResult = {
-  ok: boolean;
-  provider_id: number;
-  provider_name: string;
-  base_url: string;
-  target_url: string;
-  status: number | null;
-  duration_ms: number;
-  requested_model: string | null;
-  responded_model: string | null;
-  stream: boolean;
-  output_text_chars: number;
-  output_text_preview: string;
-  checks: JsonValue;
-  signals: JsonValue;
-  response_headers: JsonValue;
-  usage: JsonValue | null;
-  error: string | null;
-  raw_excerpt: string;
-  request: JsonValue;
-};
-export type ClaudeModelValidationRunRow = {
-  id: number;
-  provider_id: number;
-  created_at: number;
-  request_json: string;
-  result_json: string;
-};
-export type ClaudeModels = {
-  main_model?: string | null;
-  reasoning_model?: string | null;
-  haiku_model?: string | null;
-  sonnet_model?: string | null;
-  opus_model?: string | null;
-};
-export type ClaudeSettingsPatch = {
-  model: string | null;
-  output_style: string | null;
-  language: string | null;
-  always_thinking_enabled: boolean | null;
-  show_turn_duration: boolean | null;
-  spinner_tips_enabled: boolean | null;
-  terminal_progress_bar_enabled: boolean | null;
-  respect_gitignore: boolean | null;
-  disable_git_participant: boolean | null;
-  permissions_allow: string[] | null;
-  permissions_ask: string[] | null;
-  permissions_deny: string[] | null;
-  env_mcp_timeout_ms: number | null;
-  env_mcp_tool_timeout_ms: number | null;
-  env_experimental_agent_teams: boolean | null;
-  env_claude_code_auto_compact_window: number | null;
-  env_disable_background_tasks: boolean | null;
-  env_disable_terminal_title: boolean | null;
-  env_claude_bash_no_login: boolean | null;
-  env_claude_code_attribution_header: boolean | null;
-  env_claude_code_blocking_limit_override: number | null;
-  env_claude_code_max_output_tokens: number | null;
-  env_enable_experimental_mcp_cli: boolean | null;
-  env_enable_tool_search: boolean | null;
-  env_max_mcp_output_tokens: number | null;
-  env_claude_code_disable_nonessential_traffic: boolean | null;
-  env_claude_code_disable_1m_context: boolean | null;
-  env_claude_code_proxy_resolves_hosts: boolean | null;
-  env_claude_code_skip_prompt_history: boolean | null;
-};
-export type ClaudeSettingsState = {
-  config_dir: string;
-  settings_path: string;
-  exists: boolean;
-  model: string | null;
-  output_style: string | null;
-  language: string | null;
-  always_thinking_enabled: boolean | null;
-  show_turn_duration: boolean | null;
-  spinner_tips_enabled: boolean | null;
-  terminal_progress_bar_enabled: boolean | null;
-  respect_gitignore: boolean | null;
-  disable_git_participant: boolean;
-  permissions_allow: string[];
-  permissions_ask: string[];
-  permissions_deny: string[];
-  env_mcp_timeout_ms: number | null;
-  env_mcp_tool_timeout_ms: number | null;
-  env_experimental_agent_teams: boolean;
-  env_claude_code_auto_compact_window: number | null;
-  env_disable_background_tasks: boolean;
-  env_disable_terminal_title: boolean;
-  env_claude_bash_no_login: boolean;
-  env_claude_code_attribution_header: boolean;
-  env_claude_code_blocking_limit_override: number | null;
-  env_claude_code_max_output_tokens: number | null;
-  env_enable_experimental_mcp_cli: boolean;
-  env_enable_tool_search: boolean;
-  env_max_mcp_output_tokens: number | null;
-  env_claude_code_disable_nonessential_traffic: boolean;
-  env_claude_code_disable_1m_context: boolean;
-  env_claude_code_proxy_resolves_hosts: boolean;
-  env_claude_code_skip_prompt_history: boolean;
-};
-export type ClearRequestLogsResult = { request_logs_deleted: number };
-export type CliProxyResult = {
-  trace_id: string;
-  cli_key: string;
-  enabled: boolean;
-  ok: boolean;
-  error_code: string | null;
-  message: string;
-  base_origin: string | null;
-};
-export type CliProxyStatus = {
-  cli_key: string;
-  enabled: boolean;
-  base_origin: string | null;
-  current_gateway_origin: string | null;
-  applied_to_current_gateway: boolean | null;
-};
-export type CliSessionsDisplayContentBlock =
-  | { type: "text"; text: string }
-  | { type: "thinking"; thinking: string }
-  | { type: "tool_use"; id: string; name: string; input: string }
-  | { type: "tool_result"; tool_use_id: string; content: string; is_error: boolean }
-  | { type: "reasoning"; text: string }
-  | { type: "function_call"; name: string; arguments: string; call_id: string }
-  | { type: "function_call_output"; call_id: string; output: string };
-export type CliSessionsDisplayMessage = {
-  uuid: string | null;
-  role: string;
-  timestamp: string | null;
-  model: string | null;
-  content: CliSessionsDisplayContentBlock[];
-};
-export type CliSessionsFolderLookupEntry = {
-  source: string;
-  session_id: string;
-  folder_name: string;
-  folder_path: string;
-};
-export type CliSessionsFolderLookupInput = { source: string; session_id: string };
-export type CliSessionsPaginatedMessages = {
-  messages: CliSessionsDisplayMessage[];
-  total: number;
-  page: number;
-  page_size: number;
-  has_more: boolean;
-};
-export type CliSessionsProjectSummary = {
-  source: string;
-  id: string;
-  display_path: string;
-  short_name: string;
-  session_count: number;
-  last_modified: number | null;
-  model_provider: string | null;
-  wsl_distro: string | null;
-};
-export type CliSessionsSessionSummary = {
-  source: string;
-  session_id: string;
-  file_path: string;
-  first_prompt: string | null;
-  message_count: number;
-  created_at: number | null;
-  modified_at: number | null;
-  git_branch: string | null;
-  project_path: string | null;
-  is_sidechain: boolean | null;
-  cwd: string | null;
-  model_provider: string | null;
-  cli_version: string | null;
-  wsl_distro: string | null;
-};
-export type CliUpdateResult = {
-  cliKey: string;
-  success: boolean;
-  output: string;
-  error: string | null;
-};
-export type CliVersionCheck = {
-  cliKey: string;
-  npmPackage: string;
-  installedVersion: string | null;
-  latestVersion: string | null;
-  updateAvailable: boolean;
-  error: string | null;
-};
-export type CodexCatalogEventPayload = { status: CodexCatalogEventStatus };
-export type CodexCatalogEventStatus = "updated" | "failed";
-export type CodexConfigPatch = {
-  model: string | null;
-  approval_policy: string | null;
-  sandbox_mode: string | null;
-  model_reasoning_effort: string | null;
-  plan_mode_reasoning_effort: string | null;
-  web_search: string | null;
-  personality: string | null;
-  model_context_window?: number | null;
-  model_auto_compact_token_limit?: number | null;
-  service_tier: string | null;
-  sandbox_workspace_write_network_access: boolean | null;
-  features_unified_exec: boolean | null;
-  features_shell_snapshot: boolean | null;
-  features_apply_patch_freeform: boolean | null;
-  features_shell_tool: boolean | null;
-  features_exec_policy: boolean | null;
-  features_remote_compaction: boolean | null;
-  features_fast_mode: boolean | null;
-  features_responses_websockets_v2: boolean | null;
-  features_multi_agent: boolean | null;
-};
-export type CodexConfigState = {
-  config_dir: string;
-  config_path: string;
-  user_home_default_dir: string;
-  user_home_default_path: string;
-  follow_codex_home_dir: string;
-  follow_codex_home_path: string;
-  can_open_config_dir: boolean;
-  exists: boolean;
-  model: string | null;
-  approval_policy: string | null;
-  sandbox_mode: string | null;
-  model_reasoning_effort: string | null;
-  plan_mode_reasoning_effort: string | null;
-  web_search: string | null;
-  personality: string | null;
-  model_context_window: number | null;
-  model_auto_compact_token_limit: number | null;
-  service_tier: string | null;
-  sandbox_workspace_write_network_access: boolean | null;
-  features_unified_exec: boolean | null;
-  features_shell_snapshot: boolean | null;
-  features_apply_patch_freeform: boolean | null;
-  features_shell_tool: boolean | null;
-  features_exec_policy: boolean | null;
-  features_remote_compaction: boolean | null;
-  features_fast_mode: boolean | null;
-  features_responses_websockets_v2: boolean | null;
-  features_multi_agent: boolean | null;
-};
-export type CodexConfigTomlState = { config_path: string; exists: boolean; toml: string };
-export type CodexConfigTomlValidationError = {
-  message: string;
-  line: number | null;
-  column: number | null;
-};
-export type CodexConfigTomlValidationResult = {
-  ok: boolean;
-  error: CodexConfigTomlValidationError | null;
-};
-export type CodexHomeMode = "user_home_default" | "follow_codex_home" | "custom";
-export type CodexModelCapability = {
-  id: string;
-  model: string;
-  display_name: string;
-  hidden: boolean;
-  is_default: boolean;
-  supported_reasoning_efforts: CodexReasoningEffortOption[] | null;
-  default_reasoning_effort: string | null;
-};
-export type CodexModelCatalogIssue =
-  | "cli_not_found"
-  | "app_server_unavailable"
-  | "timeout"
-  | "protocol_error"
-  | "empty_catalog";
-export type CodexModelCatalogSnapshot = {
-  config_path: string;
-  executable_path: string | null;
-  cli_version: string | null;
-};
-export type CodexModelCatalogState = {
-  status: CodexModelCatalogStatus;
-  issue: CodexModelCatalogIssue | null;
-  snapshot: CodexModelCatalogSnapshot;
-  models: CodexModelCapability[];
-};
-export type CodexModelCatalogStatus = "ready" | "degraded" | "unavailable";
-export type CodexPriorityBillingSource = "requested" | "actual";
-export type CodexReasoningEffortOption = { reasoning_effort: string; description: string | null };
-export type CodexSessionIdCompletionUpdate = { enableCodexSessionIdCompletion: boolean };
-export type CommandContribution = { command: string; title: string; category?: string | null };
-export type ConfigImportResult = {
-  providers_imported: number;
-  sort_modes_imported: number;
-  workspaces_imported: number;
-  prompts_imported: number;
-  mcp_servers_imported: number;
-  skill_repos_imported: number;
-  installed_skills_imported: number;
-  local_skills_imported: number;
-};
-export type DailyResetMode = "fixed" | "rolling";
-export type DbCompactResult = { before_bytes: number; after_bytes: number };
-export type DbDiskUsage = {
-  db_bytes: number;
-  wal_bytes: number;
-  shm_bytes: number;
-  total_bytes: number;
-};
-export type DefaultPromptSyncItem = { cli_key: string; action: string; message: string | null };
-export type DefaultPromptSyncReport = { items: DefaultPromptSyncItem[] };
-export type DesktopDialogFileAccessMode = "copy" | "scoped";
-export type DesktopDialogFilter = { name: string; extensions: string[] };
-export type DesktopDialogOpenRequest = {
-  title: string | null;
-  filters: DesktopDialogFilter[] | null;
-  defaultPath: string | null;
-  multiple: boolean | null;
-  directory: boolean | null;
-  recursive: boolean | null;
-  canCreateDirectories: boolean | null;
-  pickerMode: DesktopDialogPickerMode | null;
-  fileAccessMode: DesktopDialogFileAccessMode | null;
-};
-export type DesktopDialogPickerMode = "document" | "media" | "image" | "video";
-export type DesktopDialogSaveRequest = {
-  title: string | null;
-  filters: DesktopDialogFilter[] | null;
-  defaultPath: string | null;
-  canCreateDirectories: boolean | null;
-};
-export type DesktopNotificationPayload = { title: string; body: string; sound: string | null };
-export type DesktopNotificationPermissionState =
-  | "granted"
-  | "denied"
-  | "prompt"
-  | "prompt-with-rationale";
-export type DesktopOpenPathRequest = { path: string; with: string | null };
-export type DesktopOpenUrlRequest = { url: string; with: string | null };
-export type DesktopRevealItemRequest = { path: string };
-export type DesktopThemeMode = "light" | "dark" | "system";
-export type DesktopUpdaterMetadata = {
-  rid: number;
-  currentVersion: string;
-  version: string;
-  date: string | null;
-  body: string | null;
-};
-export type EnvConflict = { var_name: string; source_type: string; source_path: string };
-export type FailoverAttempt = {
-  provider_id: number;
-  provider_name: string;
-  base_url: string;
-  outcome: string;
-  status: number | null;
-  provider_index: number | null;
-  retry_index: number | null;
-  session_reuse: boolean | null;
-  error_category: string | null;
-  error_code: string | null;
-  decision: string | null;
-  reason: string | null;
-  selection_method: string | null;
-  reason_code: string | null;
-  attempt_started_ms: number | null;
-  attempt_duration_ms: number | null;
-  circuit_state_before: string | null;
-  circuit_state_after: string | null;
-  circuit_failure_count: number | null;
-  circuit_failure_threshold: number | null;
-  circuit_recover_at_unix?: number | null;
-  circuit_trigger_error_code?: string | null;
-  provider_bridged: boolean | null;
-  timeout_secs: number | null;
-  reasoning_effort: string | null;
-  upstream_sent: boolean;
-  claude_model_mapping?: ClaudeModelMapping | null;
-  model_redirect?: ModelRedirect | null;
-};
-export type FrontendErrorReportInput = {
-  source: string;
-  message: string;
-  stack: string | null;
-  detailsJson: string | null;
-  href: string | null;
-  userAgent: string | null;
-};
-export type GatewayActiveSessionSummary = {
-  cli_key: string;
-  session_id: string;
-  session_suffix: string;
-  provider_id: number;
-  provider_name: string;
-  expires_at: number;
-  request_count: number | null;
-  total_input_tokens: number | null;
-  total_output_tokens: number | null;
-  total_cost_usd: number | null;
-  total_duration_ms: number | null;
-};
-export type GatewayAttemptEvent = {
-  trace_id: string;
-  cli_key: string;
-  session_id: string | null;
-  method: string;
-  path: string;
-  query: string | null;
-  requested_model: string | null;
-  attempt_index: number;
-  provider_id: number;
-  session_reuse: boolean | null;
-  provider_name: string;
-  base_url: string;
-  outcome: string;
-  status: number | null;
-  attempt_started_ms: number;
-  attempt_duration_ms: number;
-  circuit_state_before: string | null;
-  circuit_state_after: string | null;
-  circuit_failure_count: number | null;
-  circuit_failure_threshold: number | null;
-  claude_model_mapping: ClaudeModelMapping | null;
-  model_redirect: ModelRedirect | null;
-};
-export type GatewayCircuitEvent = {
-  trace_id: string;
-  cli_key: string;
-  provider_id: number;
-  provider_name: string;
-  base_url: string;
-  prev_state: string;
-  next_state: string;
-  failure_count: number;
-  failure_threshold: number;
-  open_until: number | null;
-  cooldown_until: number | null;
-  reason: string;
-  ts: number;
-  trigger_error_code: string | null;
-  first_byte_timeout_secs: number | null;
-};
-export type GatewayListenMode = "localhost" | "wsl_auto" | "lan" | "custom";
-export type GatewayLogEvent = {
-  level: string;
-  error_code: string;
-  message: string;
-  requested_port: number;
-  bound_port: number;
-  base_url: string;
-};
-export type GatewayProviderCircuitStatus = {
-  provider_id: number;
-  state: string;
-  failure_count: number;
-  failure_threshold: number;
-  open_until: number | null;
-  cooldown_until: number | null;
-};
-export type GatewayRectifierSettingsUpdate = {
-  verboseProviderError: boolean;
-  interceptAnthropicWarmupRequests: boolean;
-  enableThinkingEffortConflictRectifier: boolean;
-  enableThinkingSignatureRectifier: boolean;
-  enableThinkingBudgetRectifier: boolean;
-  enableGeminiFunctionIdRectifier: boolean;
-  enableResponseInputRectifier: boolean;
-  codexPriorityBillingSource: CodexPriorityBillingSource;
-  enableBillingHeaderRectifier: boolean;
-  enableClaudeMetadataUserIdInjection: boolean;
-  enableResponseFixer: boolean;
-  responseFixerFixEncoding: boolean;
-  responseFixerFixSseFormat: boolean;
-  responseFixerFixTruncatedJson: boolean;
-  responseFixerMaxJsonDepth: number;
-  responseFixerMaxFixSize: number;
-};
-export type GatewayRequestEvent = {
-  trace_id: string;
-  cli_key: string;
-  session_id: string | null;
-  method: string;
-  path: string;
-  query: string | null;
-  requested_model: string | null;
-  status: number | null;
-  error_category: string | null;
-  error_code: string | null;
-  duration_ms: number;
-  ttfb_ms: number | null;
-  attempts: FailoverAttempt[];
-  input_tokens: number | null;
-  output_tokens: number | null;
-  total_tokens: number | null;
-  cache_read_input_tokens: number | null;
-  cache_creation_input_tokens: number | null;
-  cache_creation_5m_input_tokens: number | null;
-  cache_creation_1h_input_tokens: number | null;
-  effective_input_tokens: number | null;
-  claude_model_mapping: ClaudeModelMapping | null;
-  model_redirect: ModelRedirect | null;
-  reasoning_effort: string | null;
-};
-export type GatewayRequestSignalEvent = {
-  trace_id: string;
-  cli_key: string;
-  session_id: string | null;
-  requested_model: string | null;
-  phase: string;
-  ts: number;
-};
-export type GatewayRequestStartEvent = {
-  trace_id: string;
-  cli_key: string;
-  session_id: string | null;
-  method: string;
-  path: string;
-  query: string | null;
-  requested_model: string | null;
-  ts: number;
-};
-export type GatewayStatus = {
-  running: boolean;
-  port: number | null;
-  base_url: string | null;
-  listen_addr: string | null;
-};
-export type GatewayUpstreamProxyInput = {
-  proxyUrl: string;
-  proxyUsername: string | null;
-  proxyPassword: string | null;
-};
-export type GeminiConfigPatch = {
-  modelName: string | null;
-  modelMaxSessionTurns?: number | null;
-  modelCompressionThreshold?: number | null;
-  defaultApprovalMode: string | null;
-  enableAutoUpdate?: boolean | null;
-  enableNotifications?: boolean | null;
-  vimMode?: boolean | null;
-  retryFetchErrors?: boolean | null;
-  maxAttempts?: number | null;
-  uiTheme: string | null;
-  uiHideBanner?: boolean | null;
-  uiHideTips?: boolean | null;
-  uiShowLineNumbers?: boolean | null;
-  uiInlineThinkingMode: string | null;
-  usageStatisticsEnabled?: boolean | null;
-  sessionRetentionEnabled?: boolean | null;
-  sessionRetentionMaxAge: string | null;
-  planModelRouting?: boolean | null;
-  securityAuthSelectedType: string | null;
-};
-export type GeminiConfigState = {
-  configDir: string;
-  configPath: string;
-  exists: boolean;
-  modelName: string | null;
-  modelMaxSessionTurns: number | null;
-  modelCompressionThreshold: number | null;
-  defaultApprovalMode: string | null;
-  enableAutoUpdate: boolean | null;
-  enableNotifications: boolean | null;
-  vimMode: boolean | null;
-  retryFetchErrors: boolean | null;
-  maxAttempts: number | null;
-  uiTheme: string | null;
-  uiHideBanner: boolean | null;
-  uiHideTips: boolean | null;
-  uiShowLineNumbers: boolean | null;
-  uiInlineThinkingMode: string | null;
-  usageStatisticsEnabled: boolean | null;
-  sessionRetentionEnabled: boolean | null;
-  sessionRetentionMaxAge: string | null;
-  planModelRouting: boolean | null;
-  securityAuthSelectedType: string | null;
-};
-export type GrokApiBackend = "responses" | "chat_completions";
-export type GrokConfigState = {
-  config_path: string;
-  file_exists: boolean;
-  preferences: GrokProxyPreferences;
-  aio_preferences: GrokProxyPreferences | null;
-  effective_preferences: GrokProxyPreferences;
-  preference_source: GrokPreferenceSource;
-  default_profile: string | null;
-  session_summary_profile: string | null;
-  web_search_profile: string | null;
-  image_description_profile: string | null;
-  policy_files: GrokPolicyFileState[];
-};
-export type GrokPolicyFileState = { kind: GrokPolicyKind; path: string; exists: boolean };
-export type GrokPolicyKind =
-  | "managed_system"
-  | "managed_user"
-  | "requirements_user"
-  | "requirements_system";
-export type GrokPreferenceSource = "existing_config" | "fallback" | "aio_settings";
-export type GrokProxyPreferences = {
-  model_id: string;
-  api_backend: GrokApiBackend;
-  context_window?: number | null;
-  telemetry?: boolean | null;
-  supports_backend_search?: boolean | null;
-};
-export type HomeUsagePeriod = "last7" | "last15" | "last30" | "month";
-export type HostRenderedBadgeTone = "neutral" | "success" | "warning" | "danger";
-export type HostRenderedField =
-  | {
-      type: "text";
-      key: string;
-      label: string;
-      placeholder?: string | null;
-      required?: boolean | null;
-    }
-  | {
-      type: "password";
-      key: string;
-      label: string;
-      placeholder?: string | null;
-      required?: boolean | null;
-    }
-  | {
-      type: "number";
-      key: string;
-      label: string;
-      min?: number | null;
-      max?: number | null;
-      step?: number | null;
-    }
-  | { type: "boolean"; key: string; label: string }
-  | { type: "select"; key: string; label: string; options: HostRenderedSelectOption[] }
-  | { type: "textarea"; key: string; label: string; rows?: number | null }
-  | { type: "info"; key: string; label: string; value: string }
-  | { type: "button"; key: string; label: string; command: string };
-export type HostRenderedSchema =
-  | { type: "section"; fields: HostRenderedField[] }
-  | { type: "panel"; fields: HostRenderedField[] }
-  | { type: "badge"; label: string; tone?: HostRenderedBadgeTone | null };
-export type HostRenderedSelectOption = { value: string; label: string };
+export type ActiveCommandContribution = { pluginId: string; command: string; title: string; category: string | null }
+export type ActiveContributionSnapshot = { ui: ActiveUiContribution[]; providers: ActiveProviderContribution[]; protocols: ActiveProtocolContribution[]; protocolBridges: ActiveProtocolBridgeContribution[]; commands: ActiveCommandContribution[]; gatewayHooks: ActiveGatewayHookContribution[] }
+export type ActiveGatewayHookContribution = { pluginId: string; name: string; priority: number; failurePolicy: string | null; timeoutMs?: number | null }
+export type ActiveProtocolBridgeContribution = { pluginId: string; contributionId: string; bridgeType: string; inboundProtocol: string; outboundProtocol: string; supportsStreaming: boolean | null }
+export type ActiveProtocolContribution = { pluginId: string; protocolId: string; direction: ProtocolDirection }
+export type ActiveProviderContribution = { pluginId: string; providerType: string; displayName: string; targetCliKeys: TargetCliKey[]; extensionNamespace: string }
+export type ActiveRequestSnapshotItem = { trace_id: string; cli_key: string; method: string; path: string; query: string | null; session_id: string | null; requested_model: string | null; created_at_ms: number; last_activity_ms: number; current_attempt: GatewayAttemptEvent | null }
+export type ActiveUiContribution = { pluginId: string; contributionId: string; providerExtensionNamespace: string | null; slotId: string; title: string | null; order: number; schema: JsonValue }
+export type AppAboutInfo = { os: string; arch: string; profile: string; app_version: string; bundle_type: string | null; run_mode: string }
+export type AppMemoryDiagnosticsCliSessionStats = { source: string; root: string; exists: boolean; file_count: number; total_bytes: number; max_file_bytes: number; truncated: boolean; top_files: AppMemoryDiagnosticsFileStat[] }
+export type AppMemoryDiagnosticsDbStats = { path: string; exists: boolean; db_bytes: number; wal_bytes: number; shm_bytes: number }
+export type AppMemoryDiagnosticsFileStat = { path: string; bytes: number; modified_at: number | null }
+export type AppMemoryDiagnosticsPromptStats = { count: number; total_content_len: number; max_content_len: number; top_items: AppMemoryDiagnosticsPromptTopItem[] }
+export type AppMemoryDiagnosticsPromptTopItem = { id: number; workspace_id: number; cli_key: string; name: string; enabled: boolean; content_len: number }
+export type AppMemoryDiagnosticsSnapshot = { generated_at_unix: number; app_data_dir: string; db: AppMemoryDiagnosticsDbStats; prompt_stats: AppMemoryDiagnosticsPromptStats; cli_sessions: AppMemoryDiagnosticsCliSessionStats[] }
+export type AppStartupStage = "idle" | "initializing_db" | "reading_settings" | "starting_gateway" | "syncing_cli_proxy" | "finalizing_wsl" | "ready" | "failed"
+export type AppStartupStatus = { running: boolean; currentStage: AppStartupStage; failedStage: AppStartupStage | null; errorMessage: string | null; canRetry: boolean }
+export type AvailableSkillSummary = { name: string; description: string; source_git_url: string; source_branch: string; source_subdir: string; installed: boolean }
+export type CircuitBreakerNoticeUpdate = { enableCircuitBreakerNotice: boolean }
+export type ClaudeCliInfo = { found: boolean; executable_path: string | null; version: string | null; error: string | null; shell: string | null; resolved_via: string; config_dir: string; settings_path: string; mcp_timeout_ms: number | null; disable_error_reporting: boolean }
+export type ClaudeEnvState = { config_dir: string; settings_path: string; mcp_timeout_ms: number | null; disable_error_reporting: boolean }
+export type ClaudeHookEntry = { hook_type: string; command: string; timeout?: number | null }
+export type ClaudeHookGroup = { event: string; matcher: string; hooks: ClaudeHookEntry[] }
+export type ClaudeHooksSetInput = { groups: ClaudeHookGroup[] }
+export type ClaudeHooksState = { settings_path: string; groups: ClaudeHookGroup[] }
+export type ClaudeModelMapping = { requestedModel: string; effectiveModel: string; mappingKind: string; providerId: number; providerName: string; applied: boolean }
+export type ClaudeModelValidationResult = { ok: boolean; provider_id: number; provider_name: string; base_url: string; target_url: string; status: number | null; duration_ms: number; requested_model: string | null; responded_model: string | null; stream: boolean; output_text_chars: number; output_text_preview: string; checks: JsonValue; signals: JsonValue; response_headers: JsonValue; usage: JsonValue | null; error: string | null; raw_excerpt: string; request: JsonValue }
+export type ClaudeModelValidationRunRow = { id: number; provider_id: number; created_at: number; request_json: string; result_json: string }
+export type ClaudeModels = { main_model?: string | null; reasoning_model?: string | null; haiku_model?: string | null; sonnet_model?: string | null; opus_model?: string | null }
+export type ClaudeSettingsPatch = { model: string | null; output_style: string | null; language: string | null; always_thinking_enabled: boolean | null; show_turn_duration: boolean | null; spinner_tips_enabled: boolean | null; terminal_progress_bar_enabled: boolean | null; respect_gitignore: boolean | null; disable_git_participant: boolean | null; permissions_allow: string[] | null; permissions_ask: string[] | null; permissions_deny: string[] | null; env_mcp_timeout_ms: number | null; env_mcp_tool_timeout_ms: number | null; env_experimental_agent_teams: boolean | null; env_claude_code_auto_compact_window: number | null; env_disable_background_tasks: boolean | null; env_disable_terminal_title: boolean | null; env_claude_bash_no_login: boolean | null; env_claude_code_attribution_header: boolean | null; env_claude_code_blocking_limit_override: number | null; env_claude_code_max_output_tokens: number | null; env_enable_experimental_mcp_cli: boolean | null; env_enable_tool_search: boolean | null; env_max_mcp_output_tokens: number | null; env_claude_code_disable_nonessential_traffic: boolean | null; env_claude_code_disable_1m_context: boolean | null; env_claude_code_proxy_resolves_hosts: boolean | null; env_claude_code_skip_prompt_history: boolean | null }
+export type ClaudeSettingsState = { config_dir: string; settings_path: string; exists: boolean; model: string | null; output_style: string | null; language: string | null; always_thinking_enabled: boolean | null; show_turn_duration: boolean | null; spinner_tips_enabled: boolean | null; terminal_progress_bar_enabled: boolean | null; respect_gitignore: boolean | null; disable_git_participant: boolean; permissions_allow: string[]; permissions_ask: string[]; permissions_deny: string[]; env_mcp_timeout_ms: number | null; env_mcp_tool_timeout_ms: number | null; env_experimental_agent_teams: boolean; env_claude_code_auto_compact_window: number | null; env_disable_background_tasks: boolean; env_disable_terminal_title: boolean; env_claude_bash_no_login: boolean; env_claude_code_attribution_header: boolean; env_claude_code_blocking_limit_override: number | null; env_claude_code_max_output_tokens: number | null; env_enable_experimental_mcp_cli: boolean; env_enable_tool_search: boolean; env_max_mcp_output_tokens: number | null; env_claude_code_disable_nonessential_traffic: boolean; env_claude_code_disable_1m_context: boolean; env_claude_code_proxy_resolves_hosts: boolean; env_claude_code_skip_prompt_history: boolean }
+export type ClearRequestLogsResult = { request_logs_deleted: number }
+/**
+ * Result of one export run.
+ */
+export type CliModelExportResult = { cliKey: string; providerName: string; target: string; path: string; 
+/**
+ * Models written into the provider block.
+ */
+models: string[]; 
+/**
+ * True when the provider block was created rather than updated.
+ */
+created: boolean; 
+/**
+ * True when nothing changed on disk.
+ */
+unchanged: boolean }
+export type CliProxyResult = { trace_id: string; cli_key: string; enabled: boolean; ok: boolean; error_code: string | null; message: string; base_origin: string | null }
+export type CliProxyStatus = { cli_key: string; enabled: boolean; base_origin: string | null; current_gateway_origin: string | null; applied_to_current_gateway: boolean | null }
+export type CliSessionsDisplayContentBlock = { type: "text"; text: string } | { type: "thinking"; thinking: string } | { type: "tool_use"; id: string; name: string; input: string } | { type: "tool_result"; tool_use_id: string; content: string; is_error: boolean } | { type: "reasoning"; text: string } | { type: "function_call"; name: string; arguments: string; call_id: string } | { type: "function_call_output"; call_id: string; output: string }
+export type CliSessionsDisplayMessage = { uuid: string | null; role: string; timestamp: string | null; model: string | null; content: CliSessionsDisplayContentBlock[] }
+export type CliSessionsFolderLookupEntry = { source: string; session_id: string; folder_name: string; folder_path: string }
+export type CliSessionsFolderLookupInput = { source: string; session_id: string }
+export type CliSessionsPaginatedMessages = { messages: CliSessionsDisplayMessage[]; total: number; page: number; page_size: number; has_more: boolean }
+export type CliSessionsProjectSummary = { source: string; id: string; display_path: string; short_name: string; session_count: number; last_modified: number | null; model_provider: string | null; wsl_distro: string | null }
+export type CliSessionsSessionSummary = { source: string; session_id: string; file_path: string; first_prompt: string | null; message_count: number; created_at: number | null; modified_at: number | null; git_branch: string | null; project_path: string | null; is_sidechain: boolean | null; cwd: string | null; model_provider: string | null; cli_version: string | null; wsl_distro: string | null }
+export type CliUpdateResult = { cliKey: string; success: boolean; output: string; error: string | null }
+export type CliVersionCheck = { cliKey: string; npmPackage: string; installedVersion: string | null; latestVersion: string | null; updateAvailable: boolean; error: string | null }
+export type CodexCatalogEventPayload = { status: CodexCatalogEventStatus }
+export type CodexCatalogEventStatus = "updated" | "failed"
+export type CodexConfigPatch = { model: string | null; approval_policy: string | null; sandbox_mode: string | null; model_reasoning_effort: string | null; plan_mode_reasoning_effort: string | null; web_search: string | null; personality: string | null; model_context_window?: number | null; model_auto_compact_token_limit?: number | null; service_tier: string | null; sandbox_workspace_write_network_access: boolean | null; features_unified_exec: boolean | null; features_shell_snapshot: boolean | null; features_apply_patch_freeform: boolean | null; features_shell_tool: boolean | null; features_exec_policy: boolean | null; features_remote_compaction: boolean | null; features_fast_mode: boolean | null; features_responses_websockets_v2: boolean | null; features_multi_agent: boolean | null }
+export type CodexConfigState = { config_dir: string; config_path: string; user_home_default_dir: string; user_home_default_path: string; follow_codex_home_dir: string; follow_codex_home_path: string; can_open_config_dir: boolean; exists: boolean; model: string | null; approval_policy: string | null; sandbox_mode: string | null; model_reasoning_effort: string | null; plan_mode_reasoning_effort: string | null; web_search: string | null; personality: string | null; model_context_window: number | null; model_auto_compact_token_limit: number | null; service_tier: string | null; sandbox_workspace_write_network_access: boolean | null; features_unified_exec: boolean | null; features_shell_snapshot: boolean | null; features_apply_patch_freeform: boolean | null; features_shell_tool: boolean | null; features_exec_policy: boolean | null; features_remote_compaction: boolean | null; features_fast_mode: boolean | null; features_responses_websockets_v2: boolean | null; features_multi_agent: boolean | null }
+export type CodexConfigTomlState = { config_path: string; exists: boolean; toml: string }
+export type CodexConfigTomlValidationError = { message: string; line: number | null; column: number | null }
+export type CodexConfigTomlValidationResult = { ok: boolean; error: CodexConfigTomlValidationError | null }
+export type CodexHomeMode = "user_home_default" | "follow_codex_home" | "custom"
+export type CodexModelCapability = { id: string; model: string; display_name: string; hidden: boolean; is_default: boolean; supported_reasoning_efforts: CodexReasoningEffortOption[] | null; default_reasoning_effort: string | null }
+export type CodexModelCatalogIssue = "cli_not_found" | "app_server_unavailable" | "timeout" | "protocol_error" | "empty_catalog"
+export type CodexModelCatalogSnapshot = { config_path: string; executable_path: string | null; cli_version: string | null }
+export type CodexModelCatalogState = { status: CodexModelCatalogStatus; issue: CodexModelCatalogIssue | null; snapshot: CodexModelCatalogSnapshot; models: CodexModelCapability[] }
+export type CodexModelCatalogStatus = "ready" | "degraded" | "unavailable"
+export type CodexPriorityBillingSource = "requested" | "actual"
+export type CodexReasoningEffortOption = { reasoning_effort: string; description: string | null }
+export type CodexSessionIdCompletionUpdate = { enableCodexSessionIdCompletion: boolean }
+export type CommandContribution = { command: string; title: string; category?: string | null }
+export type ConfigImportResult = { providers_imported: number; sort_modes_imported: number; workspaces_imported: number; prompts_imported: number; mcp_servers_imported: number; skill_repos_imported: number; installed_skills_imported: number; local_skills_imported: number }
+export type DailyResetMode = "fixed" | "rolling"
+export type DbCompactResult = { before_bytes: number; after_bytes: number }
+export type DbDiskUsage = { db_bytes: number; wal_bytes: number; shm_bytes: number; total_bytes: number }
+export type DefaultPromptSyncItem = { cli_key: string; action: string; message: string | null }
+export type DefaultPromptSyncReport = { items: DefaultPromptSyncItem[] }
+export type DesktopDialogFileAccessMode = "copy" | "scoped"
+export type DesktopDialogFilter = { name: string; extensions: string[] }
+export type DesktopDialogOpenRequest = { title: string | null; filters: DesktopDialogFilter[] | null; defaultPath: string | null; multiple: boolean | null; directory: boolean | null; recursive: boolean | null; canCreateDirectories: boolean | null; pickerMode: DesktopDialogPickerMode | null; fileAccessMode: DesktopDialogFileAccessMode | null }
+export type DesktopDialogPickerMode = "document" | "media" | "image" | "video"
+export type DesktopDialogSaveRequest = { title: string | null; filters: DesktopDialogFilter[] | null; defaultPath: string | null; canCreateDirectories: boolean | null }
+export type DesktopNotificationPayload = { title: string; body: string; sound: string | null }
+export type DesktopNotificationPermissionState = "granted" | "denied" | "prompt" | "prompt-with-rationale"
+export type DesktopOpenPathRequest = { path: string; with: string | null }
+export type DesktopOpenUrlRequest = { url: string; with: string | null }
+export type DesktopRevealItemRequest = { path: string }
+export type DesktopThemeMode = "light" | "dark" | "system"
+export type DesktopUpdaterMetadata = { rid: number; currentVersion: string; version: string; date: string | null; body: string | null }
+export type EnvConflict = { var_name: string; source_type: string; source_path: string }
+export type FailoverAttempt = { provider_id: number; provider_name: string; base_url: string; outcome: string; status: number | null; provider_index: number | null; retry_index: number | null; session_reuse: boolean | null; error_category: string | null; error_code: string | null; decision: string | null; reason: string | null; selection_method: string | null; reason_code: string | null; attempt_started_ms: number | null; attempt_duration_ms: number | null; circuit_state_before: string | null; circuit_state_after: string | null; circuit_failure_count: number | null; circuit_failure_threshold: number | null; circuit_recover_at_unix?: number | null; circuit_trigger_error_code?: string | null; provider_bridged: boolean | null; timeout_secs: number | null; reasoning_effort: string | null; upstream_sent: boolean; claude_model_mapping?: ClaudeModelMapping | null; model_redirect?: ModelRedirect | null }
+export type FrontendErrorReportInput = { source: string; message: string; stack: string | null; detailsJson: string | null; href: string | null; userAgent: string | null }
+export type GatewayActiveSessionSummary = { cli_key: string; session_id: string; session_suffix: string; provider_id: number; provider_name: string; expires_at: number; request_count: number | null; total_input_tokens: number | null; total_output_tokens: number | null; total_cost_usd: number | null; total_duration_ms: number | null }
+export type GatewayAttemptEvent = { trace_id: string; cli_key: string; session_id: string | null; method: string; path: string; query: string | null; requested_model: string | null; attempt_index: number; provider_id: number; session_reuse: boolean | null; provider_name: string; base_url: string; outcome: string; status: number | null; attempt_started_ms: number; attempt_duration_ms: number; circuit_state_before: string | null; circuit_state_after: string | null; circuit_failure_count: number | null; circuit_failure_threshold: number | null; claude_model_mapping: ClaudeModelMapping | null; model_redirect: ModelRedirect | null }
+export type GatewayCircuitEvent = { trace_id: string; cli_key: string; provider_id: number; provider_name: string; base_url: string; prev_state: string; next_state: string; failure_count: number; failure_threshold: number; open_until: number | null; cooldown_until: number | null; reason: string; ts: number; trigger_error_code: string | null; first_byte_timeout_secs: number | null }
+export type GatewayListenMode = "localhost" | "wsl_auto" | "lan" | "custom"
+export type GatewayLogEvent = { level: string; error_code: string; message: string; requested_port: number; bound_port: number; base_url: string }
+export type GatewayProviderCircuitStatus = { provider_id: number; state: string; failure_count: number; failure_threshold: number; open_until: number | null; cooldown_until: number | null }
+export type GatewayRectifierSettingsUpdate = { verboseProviderError: boolean; interceptAnthropicWarmupRequests: boolean; enableThinkingEffortConflictRectifier: boolean; enableThinkingSignatureRectifier: boolean; enableThinkingBudgetRectifier: boolean; enableGeminiFunctionIdRectifier: boolean; enableResponseInputRectifier: boolean; codexPriorityBillingSource: CodexPriorityBillingSource; enableBillingHeaderRectifier: boolean; enableClaudeMetadataUserIdInjection: boolean; enableResponseFixer: boolean; responseFixerFixEncoding: boolean; responseFixerFixSseFormat: boolean; responseFixerFixTruncatedJson: boolean; responseFixerMaxJsonDepth: number; responseFixerMaxFixSize: number }
+export type GatewayRequestEvent = { trace_id: string; cli_key: string; session_id: string | null; method: string; path: string; query: string | null; requested_model: string | null; status: number | null; error_category: string | null; error_code: string | null; duration_ms: number; ttfb_ms: number | null; attempts: FailoverAttempt[]; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; cache_read_input_tokens: number | null; cache_creation_input_tokens: number | null; cache_creation_5m_input_tokens: number | null; cache_creation_1h_input_tokens: number | null; effective_input_tokens: number | null; claude_model_mapping: ClaudeModelMapping | null; model_redirect: ModelRedirect | null; reasoning_effort: string | null }
+export type GatewayRequestSignalEvent = { trace_id: string; cli_key: string; session_id: string | null; requested_model: string | null; phase: string; ts: number }
+export type GatewayRequestStartEvent = { trace_id: string; cli_key: string; session_id: string | null; method: string; path: string; query: string | null; requested_model: string | null; ts: number }
+export type GatewayStatus = { running: boolean; port: number | null; base_url: string | null; listen_addr: string | null }
+export type GatewayUpstreamProxyInput = { proxyUrl: string; proxyUsername: string | null; proxyPassword: string | null }
+export type GeminiConfigPatch = { modelName: string | null; modelMaxSessionTurns?: number | null; modelCompressionThreshold?: number | null; defaultApprovalMode: string | null; enableAutoUpdate?: boolean | null; enableNotifications?: boolean | null; vimMode?: boolean | null; retryFetchErrors?: boolean | null; maxAttempts?: number | null; uiTheme: string | null; uiHideBanner?: boolean | null; uiHideTips?: boolean | null; uiShowLineNumbers?: boolean | null; uiInlineThinkingMode: string | null; usageStatisticsEnabled?: boolean | null; sessionRetentionEnabled?: boolean | null; sessionRetentionMaxAge: string | null; planModelRouting?: boolean | null; securityAuthSelectedType: string | null }
+export type GeminiConfigState = { configDir: string; configPath: string; exists: boolean; modelName: string | null; modelMaxSessionTurns: number | null; modelCompressionThreshold: number | null; defaultApprovalMode: string | null; enableAutoUpdate: boolean | null; enableNotifications: boolean | null; vimMode: boolean | null; retryFetchErrors: boolean | null; maxAttempts: number | null; uiTheme: string | null; uiHideBanner: boolean | null; uiHideTips: boolean | null; uiShowLineNumbers: boolean | null; uiInlineThinkingMode: string | null; usageStatisticsEnabled: boolean | null; sessionRetentionEnabled: boolean | null; sessionRetentionMaxAge: string | null; planModelRouting: boolean | null; securityAuthSelectedType: string | null }
+export type GrokApiBackend = "responses" | "chat_completions"
+export type GrokConfigState = { config_path: string; file_exists: boolean; preferences: GrokProxyPreferences; aio_preferences: GrokProxyPreferences | null; effective_preferences: GrokProxyPreferences; preference_source: GrokPreferenceSource; default_profile: string | null; session_summary_profile: string | null; web_search_profile: string | null; image_description_profile: string | null; policy_files: GrokPolicyFileState[] }
+export type GrokPolicyFileState = { kind: GrokPolicyKind; path: string; exists: boolean }
+export type GrokPolicyKind = "managed_system" | "managed_user" | "requirements_user" | "requirements_system"
+export type GrokPreferenceSource = "existing_config" | "fallback" | "aio_settings"
+export type GrokProxyPreferences = { model_id: string; api_backend: GrokApiBackend; context_window?: number | null; telemetry?: boolean | null; supports_backend_search?: boolean | null }
+export type HomeUsagePeriod = "last7" | "last15" | "last30" | "month"
+export type HostRenderedBadgeTone = "neutral" | "success" | "warning" | "danger"
+export type HostRenderedField = { type: "text"; key: string; label: string; placeholder?: string | null; required?: boolean | null } | { type: "password"; key: string; label: string; placeholder?: string | null; required?: boolean | null } | { type: "number"; key: string; label: string; min?: number | null; max?: number | null; step?: number | null } | { type: "boolean"; key: string; label: string } | { type: "select"; key: string; label: string; options: HostRenderedSelectOption[] } | { type: "textarea"; key: string; label: string; rows?: number | null } | { type: "info"; key: string; label: string; value: string } | { type: "button"; key: string; label: string; command: string }
+export type HostRenderedSchema = { type: "section"; fields: HostRenderedField[] } | { type: "panel"; fields: HostRenderedField[] } | { type: "badge"; label: string; tone?: HostRenderedBadgeTone | null }
+export type HostRenderedSelectOption = { value: string; label: string }
 /**
  * IPC-facing view: intentionally has no api_key field, only a configured flag.
  */
-export type ImageGenConfigView = {
-  adapterId: string;
-  baseUrl: string;
-  model: string;
-  apiKeyConfigured: boolean;
-};
-export type ImageGenFetchedImage = { mime: string; dataB64: string };
-export type ImageGenHttpResponse = { status: number; bodyText: string };
-export type ImageGenMultipartFile = {
-  field: string;
-  filename: string;
-  mime: string;
-  dataB64: string;
-};
-export type ImageGenStorageView = { dir: string; totalBytes: number; taskCount: number };
-export type ImageGenTaskFilePayload = { mime: string; dataB64: string };
-export type ImageGenTaskFileRow = {
-  /**
-   * Absolute path of the stored file.
-   */
-  path: string;
-  /**
-   * Absolute path of the thumbnail (generated images only).
-   */
-  thumbPath: string | null;
-  mime: string;
-};
-export type ImageGenTaskPersistPayload = {
-  id: string;
-  adapterId: string | null;
-  prompt: string;
-  requestJson: string;
-  status: string;
-  error: string | null;
-  usageJson: string | null;
-  createdAt: number;
-  elapsedMs: number | null;
-  images: ImageGenTaskFilePayload[];
-  /**
-   * Frontend-generated thumbnails, paired with `images` by index. Fewer
-   * thumbs than images is tolerated (missing thumb -> no thumb path).
-   */
-  thumbs: ImageGenTaskFilePayload[];
-  refImages: ImageGenTaskFilePayload[];
-};
-export type ImageGenTaskRow = {
-  id: string;
-  adapterId: string;
-  prompt: string;
-  requestJson: string;
-  status: string;
-  error: string | null;
-  usageJson: string | null;
-  images: ImageGenTaskFileRow[];
-  refImages: ImageGenTaskFileRow[];
-  dir: string;
-  createdAt: number;
-  elapsedMs: number | null;
-};
-export type InstalledSkillSummary = {
-  id: number;
-  skill_key: string;
-  name: string;
-  description: string;
-  source_git_url: string;
-  source_branch: string;
-  source_subdir: string;
-  installed_commit: string | null;
-  enabled: boolean;
-  created_at: number;
-  updated_at: number;
-};
-export type IpcConfirm = {
-  action: string;
-  resource: string;
-  nonce: string;
-  issuedAtMs: number;
-  ttlMs: number;
-};
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | Partial<{ [key in string]: JsonValue }>;
-export type LocalSkillSummary = {
-  dir_name: string;
-  path: string;
-  name: string;
-  description: string;
-  source_git_url: string | null;
-  source_branch: string | null;
-  source_subdir: string | null;
-};
-export type McpImportFromWorkspaceCliInput = { workspaceId: number };
-export type McpImportReport = { inserted: number; updated: number; skipped: McpImportSkip[] };
-export type McpImportServer = {
-  server_key: string;
-  name: string;
-  transport: string;
-  command: string | null;
-  args: string[];
-  env: Partial<{ [key in string]: string }>;
-  cwd: string | null;
-  url: string | null;
-  headers: Partial<{ [key in string]: string }>;
-  enabled: boolean;
-};
-export type McpImportServersInput = { workspaceId: number; servers: McpImportServer[] };
-export type McpImportSkip = { name: string; reason: string };
-export type McpParseJsonInput = { jsonText: string };
-export type McpParseResult = { servers: McpImportServer[] };
-export type McpSecretPatchInput = {
-  preserveKeys?: string[];
-  replace?: Partial<{ [key in string]: string }>;
-};
-export type McpServerDeleteInput = { serverId: number };
-export type McpServerEnabledInput = { workspaceId: number; serverId: number; enabled: boolean };
-export type McpServerSummaryView = {
-  id: number;
-  server_key: string;
-  name: string;
-  transport: string;
-  command: string | null;
-  args: string[];
-  env_keys: string[];
-  cwd: string | null;
-  url: string | null;
-  header_keys: string[];
-  enabled: boolean;
-  created_at: number;
-  updated_at: number;
-};
-export type McpServerUpsertInput = {
-  serverId: number | null;
-  serverKey?: string;
-  name: string;
-  transport: string;
-  command: string | null;
-  args?: string[];
-  env?: McpSecretPatchInput;
-  cwd: string | null;
-  url: string | null;
-  headers?: McpSecretPatchInput;
-};
-export type McpServersListInput = { workspaceId: number };
-export type ModelPriceAliasMatchTypeV1 = "exact" | "prefix" | "wildcard";
-export type ModelPriceAliasRuleV1 = {
-  cli_key: string;
-  match_type: ModelPriceAliasMatchTypeV1;
-  pattern: string;
-  target_model: string;
-  enabled: boolean;
-};
-export type ModelPriceAliasesV1 = { version: number; rules: ModelPriceAliasRuleV1[] };
-export type ModelPriceSummary = {
-  id: number;
-  cli_key: string;
-  /**
-   * Upstream vendor key from the price source (e.g. "anthropic", "deepseek");
-   * empty for manually upserted rows.
-   */
-  vendor: string;
-  model: string;
-  currency: string;
-  created_at: number;
-  updated_at: number;
-};
-export type ModelPricesSyncReport = {
-  status: ModelPricesSyncStatus;
-  inserted: number;
-  updated: number;
-  unchanged: number;
-  total: number;
-  error: string | null;
-};
-export type ModelPricesSyncStatus = "updated" | "not_modified" | "failed";
-export type ModelRedirect = {
-  stage: string;
-  providerId: number;
-  providerName: string;
-  sourceModel: string;
-  targetModel: string;
-};
-export type NoticeLevel = "info" | "success" | "warning" | "error";
-export type NoticeSendInput = { level: NoticeLevel; title: string | null; body: string };
-export type PluginAuditLog = {
-  id: number;
-  plugin_id: string | null;
-  trace_id: string | null;
-  event_type: string;
-  risk_level: string;
-  message: string;
-  details: JsonValue;
-  created_at: number;
-};
-export type PluginCommandImpact = { command: string; title: string; category: string | null };
-export type PluginCompatibilitySummary = {
-  compatible: boolean;
-  hostVersion: string;
-  appRange: string;
-  pluginApiRange: string;
-  platforms: string[];
-  blockingReasons: PluginLifecycleNotice[];
-};
-export type PluginContributes = {
-  providers?: ProviderContribution[];
-  protocols?: ProtocolContribution[];
-  protocolBridges?: ProtocolBridgeContribution[];
-  commands?: CommandContribution[];
-  gatewayHooks?: PluginHook[];
-  ui?: Partial<{ [key in string]: UiContribution[] }>;
-};
-export type PluginContributionChange = {
-  kind: string;
-  name: string;
-  label: string | null;
-  change: string;
-  before: string | null;
-  after: string | null;
-};
-export type PluginContributionImpact = {
-  providers: PluginContributionImpactItem[];
-  protocols: PluginContributionImpactItem[];
-  protocolBridges: PluginContributionImpactItem[];
-  uiSlots: PluginUiSlotImpact[];
-  commands: PluginCommandImpact[];
-  gateway: PluginContributionImpactItem[];
-  capabilities: string[];
-};
-export type PluginContributionImpactItem = { id: string; label: string | null };
-export type PluginDetail = {
-  summary: PluginSummary;
-  manifest: PluginManifest;
-  install_source: PluginInstallSource;
-  installed_dir: string | null;
-  config: JsonValue;
-  granted_permissions: string[];
-  pending_permissions: string[];
-  audit_logs: PluginAuditLog[];
-  runtime_failures: PluginRuntimeFailure[];
-  rollback_versions: string[];
-};
-export type PluginExecuteCommandInput = { command: string; args: JsonValue };
-export type PluginExportReplayFixtureInput = {
-  traceId: string;
-  hookName: string;
-  pluginId: string | null;
-};
-export type PluginExtensionExecutionReport = {
-  id: number;
-  pluginId: string;
-  contributionType: string;
-  contributionId: string;
-  commandOrHook: string | null;
-  traceId: string | null;
-  status: string;
-  startedAtMs: number;
-  durationMs: number;
-  failureKind: string | null;
-  errorCode: string | null;
-  inputBudget: JsonValue;
-  outputBudget: JsonValue;
-  mutationSummary: JsonValue;
-  replayable: boolean;
-  createdAt: number;
-};
-export type PluginGetInput = { pluginId: string };
-export type PluginGrantPermissionsInput = { pluginId: string; permissions: string[] };
-export type PluginHook = {
-  name: string;
-  priority?: number;
-  failurePolicy?: string | null;
-  timeoutMs?: number | null;
-};
-export type PluginHookExecutionReport = {
-  id: number;
-  plugin_id: string;
-  trace_id: string | null;
-  hook_name: string;
-  runtime_kind: string;
-  status: string;
-  started_at_ms: number;
-  duration_ms: number;
-  failure_kind: string | null;
-  error_code: string | null;
-  failure_policy: string | null;
-  circuit_state: string | null;
-  context_budget: JsonValue;
-  output_budget: JsonValue;
-  mutation_summary: JsonValue;
-  replayable: boolean;
-  replay_export_reason: string | null;
-  created_at: number;
-};
-export type PluginHookLifecycleSummary = {
-  name: string;
-  priority: number;
-  failurePolicy: string | null;
-  timeoutMs?: number | null;
-};
-export type PluginHostCompatibility = { app: string; pluginApi: string; platforms?: string[] };
-export type PluginInstallFromFileInput = { filePath: string };
-export type PluginInstallPreview = {
-  pluginId: string;
-  name: string;
-  version: string;
-  source: PluginInstallSource;
-  description: string | null;
-  author: JsonValue | null;
-  homepage: string | null;
-  repository: JsonValue | null;
-  license: string | null;
-  category: string | null;
-  runtime: PluginRuntimeLifecycleSummary;
-  hooks: PluginHookLifecycleSummary[];
-  permissions: PluginPermissionLifecycleSummary[];
-  contributionImpact: PluginContributionImpact;
-  compatibility: PluginCompatibilitySummary;
-  trust: PluginTrustSummary;
-  existingStatus: PluginStatus | null;
-  existingVersion: string | null;
-  blockingReasons: PluginLifecycleNotice[];
-  warnings: PluginLifecycleNotice[];
-};
-export type PluginInstallRemoteInput = {
-  pluginId: string;
-  downloadUrl: string;
-  checksum: string;
-  signature: string | null;
-  publicKey: string | null;
-  marketSourceUrl: string | null;
-  source: string | null;
-};
-export type PluginInstallSource = "local" | "market" | "github_release" | "offline" | "official";
-export type PluginLifecycleChange = {
-  name: string;
-  change: string;
-  before: string | null;
-  after: string | null;
-};
-export type PluginLifecycleNotice = { severity: string; code: string; message: string };
-export type PluginListAuditLogsInput = { pluginId: string | null; limit: number | null };
-export type PluginListExtensionRuntimeReportsInput = {
-  pluginId: string | null;
-  contributionType: string | null;
-  contributionId: string | null;
-  traceId: string | null;
-  limit: number | null;
-};
-export type PluginListRuntimeReportsInput = {
-  pluginId: string | null;
-  hookName: string | null;
-  traceId: string | null;
-  limit: number | null;
-};
-export type PluginManifest = {
-  id: string;
-  name: string;
-  version: string;
-  apiVersion: string;
-  runtime: PluginRuntime;
-  hooks?: PluginHook[];
-  permissions?: string[];
-  main?: string | null;
-  activationEvents?: string[];
-  contributes?: PluginContributes | null;
-  capabilities?: string[];
-  hostCompatibility: PluginHostCompatibility;
-  entry?: string | null;
-  configSchema?: JsonValue | null;
-  configVersion?: number | null;
-  description?: string | null;
-  author?: JsonValue | null;
-  homepage?: string | null;
-  repository?: JsonValue | null;
-  license?: string | null;
-  checksum?: string | null;
-  signature?: string | null;
-  category?: string | null;
-};
-export type PluginMarketIndexInput = {
-  indexJson: string;
-  indexUrl: string | null;
-  signature: string | null;
-};
-export type PluginMarketListing = {
-  pluginId: string;
-  name: string;
-  latestVersion: string | null;
-  downloadUrl: string | null;
-  marketSourceUrl: string | null;
-  checksum: string | null;
-  signature: string | null;
-  riskLabels: string[];
-  revoked: boolean;
-  compatible: boolean;
-  updateAvailable: boolean;
-  installBlockReason: string | null;
-};
-export type PluginPermissionLifecycleChange = {
-  permission: string;
-  risk: PluginPermissionRisk;
-  change: string;
-};
-export type PluginPermissionLifecycleSummary = {
-  permission: string;
-  risk: PluginPermissionRisk;
-  granted: boolean;
-  pending: boolean;
-};
-export type PluginPermissionRisk = "low" | "medium" | "high" | "critical";
-export type PluginPreviewFromFileInput = { filePath: string };
-export type PluginPreviewUpdateFromFileInput = { filePath: string };
-export type PluginReplayFixture = {
-  schemaVersion: number;
-  traceId: string;
-  source: PluginReplayFixtureSource;
-  hookName: string;
-  pluginId: string | null;
-  request: PluginReplayFixtureRequest;
-  response: PluginReplayFixtureResponse;
-  log: PluginReplayFixtureLog;
-  attempts: PluginReplayFixtureAttempt[];
-  runtimeReports: PluginHookExecutionReport[];
-  notes: string[];
-};
-export type PluginReplayFixtureAttempt = {
-  id: number;
-  traceId: string;
-  cliKey: string;
-  attemptIndex: number;
-  providerId: number;
-  providerName: string;
-  baseUrl: string;
-  outcome: string;
-  status: number | null;
-  attemptStartedMs: number;
-  attemptDurationMs: number;
-  createdAt: number;
-};
-export type PluginReplayFixtureLog = { body: JsonValue | null; meta: JsonValue };
-export type PluginReplayFixtureRequest = {
-  cliKey: string;
-  sessionId: string | null;
-  method: string | null;
-  path: string | null;
-  query: string | null;
-  provider: string | null;
-  providerSource: string | null;
-  model: string | null;
-  headers: JsonValue | null;
-  body: JsonValue | null;
-  normalizedMessages: JsonValue[];
-  meta: JsonValue;
-};
-export type PluginReplayFixtureResponse = {
-  status: number | null;
-  errorCode: string | null;
-  headers: JsonValue | null;
-  body: JsonValue | null;
-  chunks: JsonValue[];
-  meta: JsonValue;
-};
-export type PluginReplayFixtureSource = {
-  appVersion: string;
-  traceId: string;
-  exportedAtMs: number;
-  requestLogId: number;
-  createdAtMs: number;
-};
-export type PluginRevokePermissionInput = { pluginId: string; permission: string };
-export type PluginRollbackInput = { pluginId: string; version: string };
-export type PluginRuntime = { kind: "extensionHost"; language: string };
-export type PluginRuntimeFailure = {
-  id: number;
-  plugin_id: string;
-  hook_name: string | null;
-  failure_kind: string;
-  message: string;
-  trace_id: string | null;
-  created_at: number;
-};
-export type PluginRuntimeLifecycleSummary = {
-  kind: string;
-  label: string;
-  supported: boolean;
-  blockingReasons: PluginLifecycleNotice[];
-};
-export type PluginSaveConfigInput = { pluginId: string; config: JsonValue };
-export type PluginStatus =
-  | "available"
-  | "installed"
-  | "enabled"
-  | "disabled"
-  | "update_available"
-  | "incompatible"
-  | "quarantined"
-  | "uninstalled";
-export type PluginSummary = {
-  id: number;
-  plugin_id: string;
-  name: string;
-  current_version: string | null;
-  status: PluginStatus;
-  runtime: string;
-  permission_risk: PluginPermissionRisk;
-  update_available: boolean;
-  last_error: string | null;
-  created_at: number;
-  updated_at: number;
-};
-export type PluginTrustSummary = {
-  checksum: string;
-  expectedChecksum: string | null;
-  checksumVerified: boolean;
-  signatureVerified: boolean;
-  unsigned: boolean;
-  developerMode: boolean;
-};
-export type PluginUiSlotImpact = { slotId: string; contributionId: string; title: string | null };
-export type PluginUpdateDiff = {
-  pluginId: string;
-  fromVersion: string;
-  toVersion: string;
-  versionDirection: string;
-  runtimeChange: PluginLifecycleChange | null;
-  hookChanges: PluginLifecycleChange[];
-  permissionChanges: PluginPermissionLifecycleChange[];
-  contributionChanges: PluginContributionChange[];
-  configVersionChange: string | null;
-  compatibility: PluginCompatibilitySummary;
-  trust: PluginTrustSummary;
-  rollbackAvailable: boolean;
-  blockingReasons: PluginLifecycleNotice[];
-  warnings: PluginLifecycleNotice[];
-};
-export type PromptListSummary = {
-  id: number;
-  workspace_id: number;
-  cli_key: string;
-  name: string;
-  enabled: boolean;
-  content_len: number;
-  content_preview: string;
-  created_at: number;
-  updated_at: number;
-};
-export type PromptSummary = {
-  id: number;
-  workspace_id: number;
-  cli_key: string;
-  name: string;
-  content: string;
-  enabled: boolean;
-  created_at: number;
-  updated_at: number;
-};
-export type ProtocolBridgeContribution = {
-  bridgeType: string;
-  inboundProtocol: string;
-  outboundProtocol: string;
-  supportsStreaming?: boolean | null;
-};
-export type ProtocolContribution = { protocolId: string; direction: ProtocolDirection };
-export type ProtocolDirection = "inbound" | "outbound" | "both";
-export type ProviderAuthMode = "api_key" | "oauth";
-export type ProviderAvailabilityResult = {
-  ok: boolean;
-  provider_id: number;
-  provider_name: string;
-  base_url: string;
-  status: number | null;
-  latency_ms: number;
-  error: string | null;
-  response_preview: string | null;
-};
-export type ProviderBaseUrlMode = "order" | "ping";
-export type ProviderContribution = {
-  providerType: string;
-  displayName: string;
-  targetCliKeys: TargetCliKey[];
-  extensionNamespace: string;
-};
-export type ProviderExtensionValues = {
-  pluginId: string;
-  namespace: string;
-  values: JsonValue;
-  updatedAt: number;
-};
-export type ProviderExtensionValuesInput = {
-  pluginId: string;
-  namespace: string;
-  values: JsonValue;
-};
-export type ProviderLimitUsageRow = {
-  cli_key: string;
-  provider_id: number;
-  provider_name: string;
-  enabled: boolean;
-  limit_5h_usd: number | null;
-  limit_daily_usd: number | null;
-  daily_reset_mode: string | null;
-  daily_reset_time: string | null;
-  limit_weekly_usd: number | null;
-  limit_monthly_usd: number | null;
-  limit_total_usd: number | null;
-  usage_5h_usd: number;
-  usage_daily_usd: number;
-  usage_weekly_usd: number;
-  usage_monthly_usd: number;
-  usage_total_usd: number;
-  window_5h_start_ts: number;
-  window_daily_start_ts: number;
-  window_weekly_start_ts: number;
-  window_monthly_start_ts: number;
-};
-export type ProviderModelDiscoveryErrorCode =
-  | "invalid_config"
-  | "redirect"
-  | "unauthorized"
-  | "timeout"
-  | "network"
-  | "invalid_response"
-  | "too_large";
-export type ProviderModelDiscoveryInput = {
-  providerId: number | null;
-  cliKey: string;
-  authMode: ProviderAuthMode;
-  baseUrls: string[];
-  baseUrlMode: ProviderBaseUrlMode;
-  apiKey: string | null;
-  sourceProviderId: number | null;
-  bridgeType: string | null;
-};
-export type ProviderModelDiscoveryResult =
-  | { status: "ready"; models: string[]; origin: string; base_url_index: number | null }
-  | { status: "empty"; origin: string; base_url_index: number | null }
-  | { status: "unsupported"; reason: ProviderModelDiscoveryUnsupportedReason }
-  | { status: "error"; code: ProviderModelDiscoveryErrorCode; http_status: number | null };
-export type ProviderModelDiscoveryUnsupportedReason = "oauth" | "cx_2cc";
-export type ProviderModelMapping = { source: string; target: string };
-export type ProviderModelMode = "all" | "selected" | "excluded";
-export type ProviderModelPolicyStatus = "legacy" | "ready" | "invalid";
-export type ProviderModelPolicyV1 = {
-  version: number;
-  mode: ProviderModelMode;
-  modelPatterns: string[];
-  mappings: ProviderModelMapping[];
-};
-export type ProviderOAuthDeviceCodeCancelResult = { cancelled: boolean };
-export type ProviderOAuthDeviceCodePollInput = {
-  providerId: number;
-  flowId: string;
-  deviceCode: string;
-  userCode: string;
-};
-export type ProviderOAuthDeviceCodePollResult = {
-  completed: boolean;
-  provider_id: number;
-  provider_type: string;
-  expires_at: number | null;
-};
-export type ProviderOAuthDeviceCodeStartResult = {
-  provider_id: number;
-  provider_type: string;
-  flow_id: string;
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  expires_in: number;
-  interval: number;
-};
-export type ProviderOAuthDisconnectResult = { success: boolean };
-export type ProviderOAuthLimitsResult = {
-  limit_short_label: string | null;
-  limit_5h_text: string | null;
-  limit_weekly_text: string | null;
-  limit_5h_reset_at: number | null;
-  limit_weekly_reset_at: number | null;
-  reset_credit_available_count: number | null;
-};
-export type ProviderOAuthRefreshResult = { success: boolean; expires_at: number | null };
-export type ProviderOAuthResetCodexQuotaResult = {
-  success: boolean;
-  code: string | null;
-  windows_reset: number | null;
-  refreshed_limits: ProviderOAuthLimitsResult | null;
-  refresh_error: string | null;
-};
-export type ProviderOAuthStartFlowResult = {
-  success: boolean;
-  provider_id: number;
-  provider_type: string;
-  expires_at: number | null;
-};
-export type ProviderOAuthStatusResult = {
-  connected: boolean;
-  provider_type: string | null;
-  email: string | null;
-  expires_at: number | null;
-  has_refresh_token: boolean | null;
-};
-export type ProviderRouteRow = { provider_id: number };
-export type ProviderSummary = {
-  id: number;
-  cli_key: string;
-  name: string;
-  base_urls: string[];
-  base_url_mode: ProviderBaseUrlMode;
-  claude_models: ClaudeModels;
-  model_policy: ProviderModelPolicyV1 | null;
-  model_policy_status: ProviderModelPolicyStatus;
-  enabled: boolean;
-  priority: number;
-  cost_multiplier: number;
-  limit_5h_usd: number | null;
-  limit_daily_usd: number | null;
-  daily_reset_mode: DailyResetMode;
-  daily_reset_time: string;
-  limit_weekly_usd: number | null;
-  limit_monthly_usd: number | null;
-  limit_total_usd: number | null;
-  tags: string[];
-  note: string;
-  created_at: number;
-  updated_at: number;
-  auth_mode: string;
-  oauth_provider_type: string | null;
-  oauth_email: string | null;
-  oauth_expires_at: number | null;
-  oauth_last_error: string | null;
-  source_provider_id: number | null;
-  bridge_type: string | null;
-  stream_idle_timeout_seconds: number | null;
-  extension_values: ProviderExtensionValues[];
-  api_key_configured: boolean;
-};
-export type ProviderUpsertInput = {
-  providerId: number | null;
-  cliKey: string;
-  name: string;
-  baseUrls: string[];
-  baseUrlMode: ProviderBaseUrlMode;
-  authMode: ProviderAuthMode | null;
-  apiKey: string | null;
-  enabled: boolean;
-  costMultiplier: number;
-  priority: number | null;
-  claudeModels: ClaudeModels | null;
-  modelPolicy: ProviderModelPolicyV1 | null;
-  limit5hUsd: number | null;
-  limitDailyUsd: number | null;
-  dailyResetMode: DailyResetMode | null;
-  dailyResetTime: string | null;
-  limitWeeklyUsd: number | null;
-  limitMonthlyUsd: number | null;
-  limitTotalUsd: number | null;
-  tags: string[] | null;
-  note: string | null;
-  sourceProviderId: number | null;
-  bridgeType: string | null;
-  streamIdleTimeoutSeconds: number | null;
-  extensionValues: ProviderExtensionValuesInput[] | null;
-};
-export type RequestAttemptLog = {
-  id: number;
-  trace_id: string;
-  cli_key: string;
-  attempt_index: number;
-  provider_id: number;
-  provider_name: string;
-  base_url: string;
-  outcome: string;
-  status: number | null;
-  attempt_started_ms: number;
-  attempt_duration_ms: number;
-  created_at: number;
-};
-export type RequestLogDetail = {
-  id: number;
-  trace_id: string;
-  cli_key: string;
-  session_id: string | null;
-  method: string;
-  path: string;
-  query: string | null;
-  excluded_from_stats: boolean;
-  special_settings_json: string | null;
-  status: number | null;
-  error_code: string | null;
-  is_interrupted: boolean;
-  duration_ms: number;
-  ttfb_ms: number | null;
-  attempts_json: string;
-  input_tokens: number | null;
-  output_tokens: number | null;
-  total_tokens: number | null;
-  cache_read_input_tokens: number | null;
-  cache_creation_input_tokens: number | null;
-  cache_creation_5m_input_tokens: number | null;
-  cache_creation_1h_input_tokens: number | null;
-  effective_input_tokens: number | null;
-  usage_json: string | null;
-  requested_model: string | null;
-  reasoning_effort: string | null;
-  final_provider_id: number;
-  final_provider_name: string;
-  final_provider_source_id: number | null;
-  final_provider_source_name: string | null;
-  cost_usd: number | null;
-  provider_chain_json: string | null;
-  error_details_json: string | null;
-  cost_multiplier: number;
-  created_at_ms: number;
-  last_activity_ms: number | null;
-  activity_details_json: string | null;
-  created_at: number;
-};
-export type RequestLogRouteHop = {
-  provider_id: number;
-  provider_name: string;
-  ok: boolean;
-  attempts: number;
-  /**
-   * 该 provider 是否被跳过（熔断/限流等，请求未实际发送）
-   */
-  skipped: boolean;
-  status?: number | null;
-  error_code?: string | null;
-  decision?: string | null;
-  reason?: string | null;
-};
-export type RequestLogSummary = {
-  id: number;
-  trace_id: string;
-  cli_key: string;
-  session_id: string | null;
-  method: string;
-  path: string;
-  excluded_from_stats: boolean;
-  special_settings_json: string | null;
-  requested_model: string | null;
-  reasoning_effort: string | null;
-  status: number | null;
-  error_code: string | null;
-  is_interrupted: boolean;
-  duration_ms: number;
-  ttfb_ms: number | null;
-  attempt_count: number;
-  has_failover: boolean;
-  start_provider_id: number;
-  start_provider_name: string;
-  final_provider_id: number;
-  final_provider_name: string;
-  final_provider_source_id: number | null;
-  final_provider_source_name: string | null;
-  route: RequestLogRouteHop[];
-  session_reuse: boolean;
-  input_tokens: number | null;
-  output_tokens: number | null;
-  total_tokens: number | null;
-  cache_read_input_tokens: number | null;
-  cache_creation_input_tokens: number | null;
-  cache_creation_5m_input_tokens: number | null;
-  cache_creation_1h_input_tokens: number | null;
-  effective_input_tokens: number | null;
-  cost_usd: number | null;
-  provider_chain_json: string | null;
-  error_details_json: string | null;
-  cost_multiplier: number;
-  created_at_ms: number;
-  last_activity_ms: number | null;
-  activity_details_json: string | null;
-  created_at: number;
-};
-export type RiskyIpcConfirm = { confirm: IpcConfirm };
-export type SensitiveStringUpdate =
-  | { mode: "preserve" }
-  | { mode: "clear" }
-  | { mode: "replace"; value: string };
-export type SettingsMutationResult = { settings: SettingsView; runtime: SettingsMutationRuntime };
-export type SettingsMutationRuntime = {
-  gateway_rebound: boolean;
-  cli_proxy_synced: boolean;
-  wsl_auto_sync_triggered: boolean;
-  gateway_status: GatewayStatus;
-};
+export type ImageGenConfigView = { adapterId: string; baseUrl: string; model: string; apiKeyConfigured: boolean }
+export type ImageGenFetchedImage = { mime: string; dataB64: string }
+export type ImageGenHttpResponse = { status: number; bodyText: string }
+export type ImageGenMultipartFile = { field: string; filename: string; mime: string; dataB64: string }
+export type ImageGenStorageView = { dir: string; totalBytes: number; taskCount: number }
+export type ImageGenTaskFilePayload = { mime: string; dataB64: string }
+export type ImageGenTaskFileRow = { 
+/**
+ * Absolute path of the stored file.
+ */
+path: string; 
+/**
+ * Absolute path of the thumbnail (generated images only).
+ */
+thumbPath: string | null; mime: string }
+export type ImageGenTaskPersistPayload = { id: string; adapterId: string | null; prompt: string; requestJson: string; status: string; error: string | null; usageJson: string | null; createdAt: number; elapsedMs: number | null; images: ImageGenTaskFilePayload[]; 
+/**
+ * Frontend-generated thumbnails, paired with `images` by index. Fewer
+ * thumbs than images is tolerated (missing thumb -> no thumb path).
+ */
+thumbs: ImageGenTaskFilePayload[]; refImages: ImageGenTaskFilePayload[] }
+export type ImageGenTaskRow = { id: string; adapterId: string; prompt: string; requestJson: string; status: string; error: string | null; usageJson: string | null; images: ImageGenTaskFileRow[]; refImages: ImageGenTaskFileRow[]; dir: string; createdAt: number; elapsedMs: number | null }
+export type InstalledSkillSummary = { id: number; skill_key: string; name: string; description: string; source_git_url: string; source_branch: string; source_subdir: string; installed_commit: string | null; enabled: boolean; created_at: number; updated_at: number }
+export type IpcConfirm = { action: string; resource: string; nonce: string; issuedAtMs: number; ttlMs: number }
+export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
+export type LocalSkillSummary = { dir_name: string; path: string; name: string; description: string; source_git_url: string | null; source_branch: string | null; source_subdir: string | null }
+export type McpImportFromWorkspaceCliInput = { workspaceId: number }
+export type McpImportReport = { inserted: number; updated: number; skipped: McpImportSkip[] }
+export type McpImportServer = { server_key: string; name: string; transport: string; command: string | null; args: string[]; env: Partial<{ [key in string]: string }>; cwd: string | null; url: string | null; headers: Partial<{ [key in string]: string }>; enabled: boolean }
+export type McpImportServersInput = { workspaceId: number; servers: McpImportServer[] }
+export type McpImportSkip = { name: string; reason: string }
+export type McpParseJsonInput = { jsonText: string }
+export type McpParseResult = { servers: McpImportServer[] }
+export type McpSecretPatchInput = { preserveKeys?: string[]; replace?: Partial<{ [key in string]: string }> }
+export type McpServerDeleteInput = { serverId: number }
+export type McpServerEnabledInput = { workspaceId: number; serverId: number; enabled: boolean }
+export type McpServerSummaryView = { id: number; server_key: string; name: string; transport: string; command: string | null; args: string[]; env_keys: string[]; cwd: string | null; url: string | null; header_keys: string[]; enabled: boolean; created_at: number; updated_at: number }
+export type McpServerUpsertInput = { serverId: number | null; serverKey?: string; name: string; transport: string; command: string | null; args?: string[]; env?: McpSecretPatchInput; cwd: string | null; url: string | null; headers?: McpSecretPatchInput }
+export type McpServersListInput = { workspaceId: number }
+/**
+ * One provider's user-approved apply decision.
+ */
+export type ModelCatalogApplyDecision = { providerId: number; 
+/**
+ * Remote model list staged at preview time.
+ */
+remoteModels: string[]; applyAdded: boolean; applyRemoved: boolean }
+export type ModelCatalogApplyInput = { cliKey: string; decisions: ModelCatalogApplyDecision[] }
+export type ModelCatalogItem = { modelId: string; contextWindow: number; reasoningEffort: string; metadataSource: string; enabled: boolean; routes: ModelCatalogRoute[] }
+/**
+ * Per-provider remote-vs-local model diff produced by `model_catalog_refresh_preview`.
+ */
+export type ModelCatalogProviderDiff = { providerId: number; providerName: string; 
+/**
+ * Models present in the fresh remote list but not in the stored snapshot.
+ */
+added: string[]; 
+/**
+ * Models in the stored snapshot but missing from the fresh remote list.
+ */
+removed: string[]; 
+/**
+ * Discovery was unreachable/failed; the provider is excluded from apply.
+ */
+error?: string | null; 
+/**
+ * The remote list staged at preview time, echoed back on apply.
+ */
+remoteModels: string[] }
+export type ModelCatalogRefreshPreview = { cliKey: string; providers: ModelCatalogProviderDiff[] }
+export type ModelCatalogResult = { cliKey: string; defaultContextWindow: number; defaultReasoningEffort: string; supportedReasoningEfforts: string[]; items: ModelCatalogItem[] }
+export type ModelCatalogRoute = { providerId: number; providerName: string; routeOrder: number; upstreamModelId: string; snapshotStatus: string; isMapping: boolean }
+export type ModelCatalogSetEnabledInput = { cliKey: string; modelId: string; enabled: boolean }
+export type ModelCatalogUpdateInput = { cliKey: string; modelId: string; contextWindow: number; reasoningEffort: string }
+export type ModelPriceAliasMatchTypeV1 = "exact" | "prefix" | "wildcard"
+export type ModelPriceAliasRuleV1 = { cli_key: string; match_type: ModelPriceAliasMatchTypeV1; pattern: string; target_model: string; enabled: boolean }
+export type ModelPriceAliasesV1 = { version: number; rules: ModelPriceAliasRuleV1[] }
+export type ModelPriceSummary = { id: number; cli_key: string; 
+/**
+ * Upstream vendor key from the price source (e.g. "anthropic", "deepseek");
+ * empty for manually upserted rows.
+ */
+vendor: string; model: string; currency: string; created_at: number; updated_at: number }
+export type ModelPricesSyncReport = { status: ModelPricesSyncStatus; inserted: number; updated: number; unchanged: number; total: number; error: string | null }
+export type ModelPricesSyncStatus = "updated" | "not_modified" | "failed"
+export type ModelRedirect = { stage: string; providerId: number; providerName: string; sourceModel: string; targetModel: string }
+export type NoticeLevel = "info" | "success" | "warning" | "error"
+export type NoticeSendInput = { level: NoticeLevel; title: string | null; body: string }
+export type PluginAuditLog = { id: number; plugin_id: string | null; trace_id: string | null; event_type: string; risk_level: string; message: string; details: JsonValue; created_at: number }
+export type PluginCommandImpact = { command: string; title: string; category: string | null }
+export type PluginCompatibilitySummary = { compatible: boolean; hostVersion: string; appRange: string; pluginApiRange: string; platforms: string[]; blockingReasons: PluginLifecycleNotice[] }
+export type PluginContributes = { providers?: ProviderContribution[]; protocols?: ProtocolContribution[]; protocolBridges?: ProtocolBridgeContribution[]; commands?: CommandContribution[]; gatewayHooks?: PluginHook[]; ui?: Partial<{ [key in string]: UiContribution[] }> }
+export type PluginContributionChange = { kind: string; name: string; label: string | null; change: string; before: string | null; after: string | null }
+export type PluginContributionImpact = { providers: PluginContributionImpactItem[]; protocols: PluginContributionImpactItem[]; protocolBridges: PluginContributionImpactItem[]; uiSlots: PluginUiSlotImpact[]; commands: PluginCommandImpact[]; gateway: PluginContributionImpactItem[]; capabilities: string[] }
+export type PluginContributionImpactItem = { id: string; label: string | null }
+export type PluginDetail = { summary: PluginSummary; manifest: PluginManifest; install_source: PluginInstallSource; installed_dir: string | null; config: JsonValue; granted_permissions: string[]; pending_permissions: string[]; audit_logs: PluginAuditLog[]; runtime_failures: PluginRuntimeFailure[]; rollback_versions: string[] }
+export type PluginExecuteCommandInput = { command: string; args: JsonValue }
+export type PluginExportReplayFixtureInput = { traceId: string; hookName: string; pluginId: string | null }
+export type PluginExtensionExecutionReport = { id: number; pluginId: string; contributionType: string; contributionId: string; commandOrHook: string | null; traceId: string | null; status: string; startedAtMs: number; durationMs: number; failureKind: string | null; errorCode: string | null; inputBudget: JsonValue; outputBudget: JsonValue; mutationSummary: JsonValue; replayable: boolean; createdAt: number }
+export type PluginGetInput = { pluginId: string }
+export type PluginGrantPermissionsInput = { pluginId: string; permissions: string[] }
+export type PluginHook = { name: string; priority?: number; failurePolicy?: string | null; timeoutMs?: number | null }
+export type PluginHookExecutionReport = { id: number; plugin_id: string; trace_id: string | null; hook_name: string; runtime_kind: string; status: string; started_at_ms: number; duration_ms: number; failure_kind: string | null; error_code: string | null; failure_policy: string | null; circuit_state: string | null; context_budget: JsonValue; output_budget: JsonValue; mutation_summary: JsonValue; replayable: boolean; replay_export_reason: string | null; created_at: number }
+export type PluginHookLifecycleSummary = { name: string; priority: number; failurePolicy: string | null; timeoutMs?: number | null }
+export type PluginHostCompatibility = { app: string; pluginApi: string; platforms?: string[] }
+export type PluginInstallFromFileInput = { filePath: string }
+export type PluginInstallPreview = { pluginId: string; name: string; version: string; source: PluginInstallSource; description: string | null; author: JsonValue | null; homepage: string | null; repository: JsonValue | null; license: string | null; category: string | null; runtime: PluginRuntimeLifecycleSummary; hooks: PluginHookLifecycleSummary[]; permissions: PluginPermissionLifecycleSummary[]; contributionImpact: PluginContributionImpact; compatibility: PluginCompatibilitySummary; trust: PluginTrustSummary; existingStatus: PluginStatus | null; existingVersion: string | null; blockingReasons: PluginLifecycleNotice[]; warnings: PluginLifecycleNotice[] }
+export type PluginInstallRemoteInput = { pluginId: string; downloadUrl: string; checksum: string; signature: string | null; publicKey: string | null; marketSourceUrl: string | null; source: string | null }
+export type PluginInstallSource = "local" | "market" | "github_release" | "offline" | "official"
+export type PluginLifecycleChange = { name: string; change: string; before: string | null; after: string | null }
+export type PluginLifecycleNotice = { severity: string; code: string; message: string }
+export type PluginListAuditLogsInput = { pluginId: string | null; limit: number | null }
+export type PluginListExtensionRuntimeReportsInput = { pluginId: string | null; contributionType: string | null; contributionId: string | null; traceId: string | null; limit: number | null }
+export type PluginListRuntimeReportsInput = { pluginId: string | null; hookName: string | null; traceId: string | null; limit: number | null }
+export type PluginManifest = { id: string; name: string; version: string; apiVersion: string; runtime: PluginRuntime; hooks?: PluginHook[]; permissions?: string[]; main?: string | null; activationEvents?: string[]; contributes?: PluginContributes | null; capabilities?: string[]; hostCompatibility: PluginHostCompatibility; entry?: string | null; configSchema?: JsonValue | null; configVersion?: number | null; description?: string | null; author?: JsonValue | null; homepage?: string | null; repository?: JsonValue | null; license?: string | null; checksum?: string | null; signature?: string | null; category?: string | null }
+export type PluginMarketIndexInput = { indexJson: string; indexUrl: string | null; signature: string | null }
+export type PluginMarketListing = { pluginId: string; name: string; latestVersion: string | null; downloadUrl: string | null; marketSourceUrl: string | null; checksum: string | null; signature: string | null; riskLabels: string[]; revoked: boolean; compatible: boolean; updateAvailable: boolean; installBlockReason: string | null }
+export type PluginPermissionLifecycleChange = { permission: string; risk: PluginPermissionRisk; change: string }
+export type PluginPermissionLifecycleSummary = { permission: string; risk: PluginPermissionRisk; granted: boolean; pending: boolean }
+export type PluginPermissionRisk = "low" | "medium" | "high" | "critical"
+export type PluginPreviewFromFileInput = { filePath: string }
+export type PluginPreviewUpdateFromFileInput = { filePath: string }
+export type PluginReplayFixture = { schemaVersion: number; traceId: string; source: PluginReplayFixtureSource; hookName: string; pluginId: string | null; request: PluginReplayFixtureRequest; response: PluginReplayFixtureResponse; log: PluginReplayFixtureLog; attempts: PluginReplayFixtureAttempt[]; runtimeReports: PluginHookExecutionReport[]; notes: string[] }
+export type PluginReplayFixtureAttempt = { id: number; traceId: string; cliKey: string; attemptIndex: number; providerId: number; providerName: string; baseUrl: string; outcome: string; status: number | null; attemptStartedMs: number; attemptDurationMs: number; createdAt: number }
+export type PluginReplayFixtureLog = { body: JsonValue | null; meta: JsonValue }
+export type PluginReplayFixtureRequest = { cliKey: string; sessionId: string | null; method: string | null; path: string | null; query: string | null; provider: string | null; providerSource: string | null; model: string | null; headers: JsonValue | null; body: JsonValue | null; normalizedMessages: JsonValue[]; meta: JsonValue }
+export type PluginReplayFixtureResponse = { status: number | null; errorCode: string | null; headers: JsonValue | null; body: JsonValue | null; chunks: JsonValue[]; meta: JsonValue }
+export type PluginReplayFixtureSource = { appVersion: string; traceId: string; exportedAtMs: number; requestLogId: number; createdAtMs: number }
+export type PluginRevokePermissionInput = { pluginId: string; permission: string }
+export type PluginRollbackInput = { pluginId: string; version: string }
+export type PluginRuntime = { kind: "extensionHost"; language: string }
+export type PluginRuntimeFailure = { id: number; plugin_id: string; hook_name: string | null; failure_kind: string; message: string; trace_id: string | null; created_at: number }
+export type PluginRuntimeLifecycleSummary = { kind: string; label: string; supported: boolean; blockingReasons: PluginLifecycleNotice[] }
+export type PluginSaveConfigInput = { pluginId: string; config: JsonValue }
+export type PluginStatus = "available" | "installed" | "enabled" | "disabled" | "update_available" | "incompatible" | "quarantined" | "uninstalled"
+export type PluginSummary = { id: number; plugin_id: string; name: string; current_version: string | null; status: PluginStatus; runtime: string; permission_risk: PluginPermissionRisk; update_available: boolean; last_error: string | null; created_at: number; updated_at: number }
+export type PluginTrustSummary = { checksum: string; expectedChecksum: string | null; checksumVerified: boolean; signatureVerified: boolean; unsigned: boolean; developerMode: boolean }
+export type PluginUiSlotImpact = { slotId: string; contributionId: string; title: string | null }
+export type PluginUpdateDiff = { pluginId: string; fromVersion: string; toVersion: string; versionDirection: string; runtimeChange: PluginLifecycleChange | null; hookChanges: PluginLifecycleChange[]; permissionChanges: PluginPermissionLifecycleChange[]; contributionChanges: PluginContributionChange[]; configVersionChange: string | null; compatibility: PluginCompatibilitySummary; trust: PluginTrustSummary; rollbackAvailable: boolean; blockingReasons: PluginLifecycleNotice[]; warnings: PluginLifecycleNotice[] }
+export type PromptListSummary = { id: number; workspace_id: number; cli_key: string; name: string; enabled: boolean; content_len: number; content_preview: string; created_at: number; updated_at: number }
+export type PromptSummary = { id: number; workspace_id: number; cli_key: string; name: string; content: string; enabled: boolean; created_at: number; updated_at: number }
+export type ProtocolBridgeContribution = { bridgeType: string; inboundProtocol: string; outboundProtocol: string; supportsStreaming?: boolean | null }
+export type ProtocolContribution = { protocolId: string; direction: ProtocolDirection }
+export type ProtocolDirection = "inbound" | "outbound" | "both"
+export type ProviderAuthMode = "api_key" | "oauth"
+export type ProviderAvailabilityResult = { ok: boolean; provider_id: number; provider_name: string; base_url: string; status: number | null; latency_ms: number; error: string | null; response_preview: string | null }
+export type ProviderBaseUrlMode = "order" | "ping"
+export type ProviderContribution = { providerType: string; displayName: string; targetCliKeys: TargetCliKey[]; extensionNamespace: string }
+export type ProviderExtensionValues = { pluginId: string; namespace: string; values: JsonValue; updatedAt: number }
+export type ProviderExtensionValuesInput = { pluginId: string; namespace: string; values: JsonValue }
+export type ProviderLimitUsageRow = { cli_key: string; provider_id: number; provider_name: string; enabled: boolean; limit_5h_usd: number | null; limit_daily_usd: number | null; daily_reset_mode: string | null; daily_reset_time: string | null; limit_weekly_usd: number | null; limit_monthly_usd: number | null; limit_total_usd: number | null; usage_5h_usd: number; usage_daily_usd: number; usage_weekly_usd: number; usage_monthly_usd: number; usage_total_usd: number; window_5h_start_ts: number; window_daily_start_ts: number; window_weekly_start_ts: number; window_monthly_start_ts: number }
+export type ProviderModelDiscoveryErrorCode = "invalid_config" | "redirect" | "unauthorized" | "timeout" | "network" | "invalid_response" | "too_large"
+export type ProviderModelDiscoveryInput = { providerId: number | null; cliKey: string; authMode: ProviderAuthMode; baseUrls: string[]; baseUrlMode: ProviderBaseUrlMode; apiKey: string | null; sourceProviderId: number | null; bridgeType: string | null }
+export type ProviderModelDiscoveryResult = { status: "ready"; models: string[]; origin: string; base_url_index: number | null } | { status: "empty"; origin: string; base_url_index: number | null } | { status: "unsupported"; reason: ProviderModelDiscoveryUnsupportedReason } | { status: "error"; code: ProviderModelDiscoveryErrorCode; http_status: number | null }
+export type ProviderModelDiscoveryUnsupportedReason = "oauth" | "cx_2cc"
+export type ProviderModelMapping = { source: string; target: string }
+export type ProviderModelMode = "all" | "selected" | "excluded"
+export type ProviderModelPolicyStatus = "legacy" | "ready" | "invalid"
+export type ProviderModelPolicyV1 = { version: number; mode: ProviderModelMode; modelPatterns: string[]; mappings: ProviderModelMapping[] }
+export type ProviderOAuthDeviceCodeCancelResult = { cancelled: boolean }
+export type ProviderOAuthDeviceCodePollInput = { providerId: number; flowId: string; deviceCode: string; userCode: string }
+export type ProviderOAuthDeviceCodePollResult = { completed: boolean; provider_id: number; provider_type: string; expires_at: number | null }
+export type ProviderOAuthDeviceCodeStartResult = { provider_id: number; provider_type: string; flow_id: string; device_code: string; user_code: string; verification_uri: string; expires_in: number; interval: number }
+export type ProviderOAuthDisconnectResult = { success: boolean }
+export type ProviderOAuthLimitsResult = { limit_short_label: string | null; limit_5h_text: string | null; limit_weekly_text: string | null; limit_5h_reset_at: number | null; limit_weekly_reset_at: number | null; reset_credit_available_count: number | null }
+export type ProviderOAuthRefreshResult = { success: boolean; expires_at: number | null }
+export type ProviderOAuthResetCodexQuotaResult = { success: boolean; code: string | null; windows_reset: number | null; refreshed_limits: ProviderOAuthLimitsResult | null; refresh_error: string | null }
+export type ProviderOAuthStartFlowResult = { success: boolean; provider_id: number; provider_type: string; expires_at: number | null }
+export type ProviderOAuthStatusResult = { connected: boolean; provider_type: string | null; email: string | null; expires_at: number | null; has_refresh_token: boolean | null }
+export type ProviderRouteRow = { provider_id: number }
+export type ProviderSummary = { id: number; cli_key: string; name: string; base_urls: string[]; base_url_mode: ProviderBaseUrlMode; claude_models: ClaudeModels; model_policy: ProviderModelPolicyV1 | null; model_policy_status: ProviderModelPolicyStatus; enabled: boolean; priority: number; cost_multiplier: number; limit_5h_usd: number | null; limit_daily_usd: number | null; daily_reset_mode: DailyResetMode; daily_reset_time: string; limit_weekly_usd: number | null; limit_monthly_usd: number | null; limit_total_usd: number | null; tags: string[]; note: string; created_at: number; updated_at: number; auth_mode: string; oauth_provider_type: string | null; oauth_email: string | null; oauth_expires_at: number | null; oauth_last_error: string | null; source_provider_id: number | null; bridge_type: string | null; stream_idle_timeout_seconds: number | null; extension_values: ProviderExtensionValues[]; api_key_configured: boolean }
+export type ProviderUpsertInput = { providerId: number | null; cliKey: string; name: string; baseUrls: string[]; baseUrlMode: ProviderBaseUrlMode; authMode: ProviderAuthMode | null; apiKey: string | null; enabled: boolean; costMultiplier: number; priority: number | null; claudeModels: ClaudeModels | null; modelPolicy: ProviderModelPolicyV1 | null; limit5hUsd: number | null; limitDailyUsd: number | null; dailyResetMode: DailyResetMode | null; dailyResetTime: string | null; limitWeeklyUsd: number | null; limitMonthlyUsd: number | null; limitTotalUsd: number | null; tags: string[] | null; note: string | null; sourceProviderId: number | null; bridgeType: string | null; streamIdleTimeoutSeconds: number | null; extensionValues: ProviderExtensionValuesInput[] | null }
+export type RequestAttemptLog = { id: number; trace_id: string; cli_key: string; attempt_index: number; provider_id: number; provider_name: string; base_url: string; outcome: string; status: number | null; attempt_started_ms: number; attempt_duration_ms: number; created_at: number }
+export type RequestLogDetail = { id: number; trace_id: string; cli_key: string; client_identity: string; session_id: string | null; method: string; path: string; query: string | null; excluded_from_stats: boolean; special_settings_json: string | null; status: number | null; error_code: string | null; is_interrupted: boolean; duration_ms: number; ttfb_ms: number | null; attempts_json: string; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; cache_read_input_tokens: number | null; cache_creation_input_tokens: number | null; cache_creation_5m_input_tokens: number | null; cache_creation_1h_input_tokens: number | null; effective_input_tokens: number | null; usage_json: string | null; requested_model: string | null; reasoning_effort: string | null; final_provider_id: number; final_provider_name: string; final_provider_source_id: number | null; final_provider_source_name: string | null; cost_usd: number | null; provider_chain_json: string | null; error_details_json: string | null; cost_multiplier: number; created_at_ms: number; last_activity_ms: number | null; activity_details_json: string | null; created_at: number }
+export type RequestLogRouteHop = { provider_id: number; provider_name: string; ok: boolean; attempts: number; 
+/**
+ * 该 provider 是否被跳过（熔断/限流等，请求未实际发送）
+ */
+skipped: boolean; status?: number | null; error_code?: string | null; decision?: string | null; reason?: string | null }
+export type RequestLogSummary = { id: number; trace_id: string; cli_key: string; client_identity: string; session_id: string | null; method: string; path: string; excluded_from_stats: boolean; special_settings_json: string | null; requested_model: string | null; reasoning_effort: string | null; status: number | null; error_code: string | null; is_interrupted: boolean; duration_ms: number; ttfb_ms: number | null; attempt_count: number; has_failover: boolean; start_provider_id: number; start_provider_name: string; final_provider_id: number; final_provider_name: string; final_provider_source_id: number | null; final_provider_source_name: string | null; route: RequestLogRouteHop[]; session_reuse: boolean; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; cache_read_input_tokens: number | null; cache_creation_input_tokens: number | null; cache_creation_5m_input_tokens: number | null; cache_creation_1h_input_tokens: number | null; effective_input_tokens: number | null; cost_usd: number | null; provider_chain_json: string | null; error_details_json: string | null; cost_multiplier: number; created_at_ms: number; last_activity_ms: number | null; activity_details_json: string | null; created_at: number }
+export type RiskyIpcConfirm = { confirm: IpcConfirm }
+export type SensitiveStringUpdate = { mode: "preserve" } | { mode: "clear" } | { mode: "replace"; value: string }
+export type SettingsMutationResult = { settings: SettingsView; runtime: SettingsMutationRuntime }
+export type SettingsMutationRuntime = { gateway_rebound: boolean; cli_proxy_synced: boolean; wsl_auto_sync_triggered: boolean; gateway_status: GatewayStatus }
 /**
  * Encapsulates all fields for the `settings_set` command.
  */
-export type SettingsUpdate = {
-  preferredPort: number;
-  showHomeHeatmap: boolean | null;
-  showHomeUsage: boolean | null;
-  homeUsagePeriod: HomeUsagePeriod | null;
-  gatewayListenMode: GatewayListenMode | null;
-  gatewayCustomListenAddress: string | null;
-  autoStart: boolean;
-  startMinimized: boolean | null;
-  trayEnabled: boolean | null;
-  enableCliProxyStartupRecovery: boolean | null;
-  logRetentionDays: number;
-  requestLogRetentionDays: number | null;
-  providerCooldownSeconds: number | null;
-  providerBaseUrlPingCacheTtlSeconds: number | null;
-  upstreamFirstByteTimeoutSeconds: number | null;
-  upstreamStreamIdleTimeoutSeconds: number | null;
-  upstreamRequestTimeoutNonStreamingSeconds: number | null;
-  interceptAnthropicWarmupRequests: boolean | null;
-  enableThinkingEffortConflictRectifier: boolean | null;
-  enableThinkingSignatureRectifier: boolean | null;
-  enableThinkingBudgetRectifier: boolean | null;
-  enableGeminiFunctionIdRectifier: boolean | null;
-  enableResponseInputRectifier: boolean | null;
-  codexPriorityBillingSource: CodexPriorityBillingSource | null;
-  enableBillingHeaderRectifier: boolean | null;
-  enableClaudeMetadataUserIdInjection: boolean | null;
-  enableCacheAnomalyMonitor: boolean | null;
-  enableDebugLog: boolean | null;
-  enableTaskCompleteNotify: boolean | null;
-  enableNotificationSound: boolean | null;
-  enableResponseFixer: boolean | null;
-  responseFixerFixEncoding: boolean | null;
-  responseFixerFixSseFormat: boolean | null;
-  responseFixerFixTruncatedJson: boolean | null;
-  verboseProviderError: boolean | null;
-  failoverMaxAttemptsPerProvider: number;
-  failoverMaxProvidersToTry: number;
-  circuitBreakerFailureThreshold: number | null;
-  circuitBreakerOpenDurationMinutes: number | null;
-  updateReleasesUrl: string | null;
-  wslAutoConfig: boolean | null;
-  wslTargetCli: WslTargetCli | null;
-  cliPriorityOrder: string[] | null;
-  wslHostAddressMode: WslHostAddressMode | null;
-  wslCustomHostAddress: string | null;
-  codexHomeMode: CodexHomeMode | null;
-  codexHomeOverride: string | null;
-  codexOauthCompatibleProxyMode: boolean | null;
-  cx2CcFallbackModelOpus: string | null;
-  cx2CcFallbackModelSonnet: string | null;
-  cx2CcFallbackModelHaiku: string | null;
-  cx2CcFallbackModelMain: string | null;
-  cx2CcModelReasoningEffort: string | null;
-  cx2CcServiceTier: string | null;
-  cx2CcDisableResponseStorage: boolean | null;
-  cx2CcEnableReasoningToThinking: boolean | null;
-  cx2CcDropStopSequences: boolean | null;
-  cx2CcCleanSchema: boolean | null;
-  cx2CcFilterBatchTool: boolean | null;
-  upstreamProxyEnabled: boolean | null;
-  upstreamProxyUrl: string | null;
-  upstreamProxyUsername: string | null;
-  upstreamProxyPassword: SensitiveStringUpdate | null;
-};
-export type SettingsView = {
-  schema_version: number;
-  preferred_port: number;
-  show_home_heatmap: boolean;
-  show_home_usage: boolean;
-  home_usage_period: HomeUsagePeriod;
-  gateway_listen_mode: GatewayListenMode;
-  gateway_custom_listen_address: string;
-  wsl_auto_config: boolean;
-  wsl_target_cli: WslTargetCli;
-  cli_priority_order: string[];
-  wsl_host_address_mode: WslHostAddressMode;
-  wsl_custom_host_address: string;
-  codex_home_mode: CodexHomeMode;
-  codex_home_override: string;
-  codex_oauth_compatible_proxy_mode: boolean;
-  auto_start: boolean;
-  start_minimized: boolean;
-  tray_enabled: boolean;
-  enable_cli_proxy_startup_recovery: boolean;
-  log_retention_days: number;
-  request_log_retention_days: number;
-  provider_cooldown_seconds: number;
-  provider_base_url_ping_cache_ttl_seconds: number;
-  upstream_first_byte_timeout_seconds: number;
-  upstream_stream_idle_timeout_seconds: number;
-  upstream_request_timeout_non_streaming_seconds: number;
-  update_releases_url: string;
-  failover_max_attempts_per_provider: number;
-  failover_max_providers_to_try: number;
-  circuit_breaker_failure_threshold: number;
-  circuit_breaker_open_duration_minutes: number;
-  enable_circuit_breaker_notice: boolean;
-  verbose_provider_error: boolean;
-  intercept_anthropic_warmup_requests: boolean;
-  enable_thinking_effort_conflict_rectifier: boolean;
-  enable_thinking_signature_rectifier: boolean;
-  enable_thinking_budget_rectifier: boolean;
-  enable_gemini_function_id_rectifier: boolean;
-  enable_response_input_rectifier: boolean;
-  codex_priority_billing_source: CodexPriorityBillingSource;
-  enable_billing_header_rectifier: boolean;
-  enable_codex_session_id_completion: boolean;
-  enable_claude_metadata_user_id_injection: boolean;
-  enable_cache_anomaly_monitor: boolean;
-  enable_debug_log: boolean;
-  enable_task_complete_notify: boolean;
-  enable_notification_sound: boolean;
-  enable_response_fixer: boolean;
-  response_fixer_fix_encoding: boolean;
-  response_fixer_fix_sse_format: boolean;
-  response_fixer_fix_truncated_json: boolean;
-  response_fixer_max_json_depth: number;
-  response_fixer_max_fix_size: number;
-  cx2cc_fallback_model_opus: string;
-  cx2cc_fallback_model_sonnet: string;
-  cx2cc_fallback_model_haiku: string;
-  cx2cc_fallback_model_main: string;
-  cx2cc_model_reasoning_effort: string;
-  cx2cc_service_tier: string;
-  cx2cc_disable_response_storage: boolean;
-  cx2cc_enable_reasoning_to_thinking: boolean;
-  cx2cc_drop_stop_sequences: boolean;
-  cx2cc_clean_schema: boolean;
-  cx2cc_filter_batch_tool: boolean;
-  upstream_proxy_enabled: boolean;
-  upstream_proxy_url: string;
-  upstream_proxy_username: string;
-  upstream_proxy_password_configured: boolean;
-};
-export type SimpleCliInfo = {
-  found: boolean;
-  executable_path: string | null;
-  version: string | null;
-  error: string | null;
-  shell: string | null;
-  resolved_via: string;
-};
-export type SkillImportIssue = { dir_name: string; error_code: string | null; message: string };
-export type SkillImportLocalBatchReport = {
-  imported: InstalledSkillSummary[];
-  skipped: SkillImportIssue[];
-  failed: SkillImportIssue[];
-};
-export type SkillRepoSummary = {
-  id: number;
-  git_url: string;
-  branch: string;
-  enabled: boolean;
-  created_at: number;
-  updated_at: number;
-};
-export type SkillUpdateInfo = {
-  skill_id: number;
-  has_update: boolean;
-  installed_commit: string | null;
-  latest_commit: string | null;
-};
-export type SkillsPaths = { ssot_dir: string; repos_dir: string; cli_dir: string };
-export type SortModeActiveRow = { cli_key: string; mode_id: number | null; updated_at: number };
-export type SortModeProviderRow = { provider_id: number; enabled: boolean };
-export type SortModeSummary = { id: number; name: string; created_at: number; updated_at: number };
-export type TargetCliKey = "claude" | "codex" | "gemini";
-export type UiContribution = {
-  id: string;
-  title?: string | null;
-  order?: number | null;
-  schema: HostRenderedSchema;
-  when?: string | null;
-};
-export type UsageDayDetailParams = {
-  day: string;
-  cliKey: string | null;
-  providerId: number | null;
-  folderLimit: number | null;
-  folderKeys: string[] | null;
-  dayStartHour: number | null;
-  excludeCx2CcGatewayBridge: boolean | null;
-};
-export type UsageDayDetailV1 = {
-  day: string;
-  folders: UsageDayFolderRow[];
-  hours: UsageDayHourRow[];
-};
-export type UsageDayFolderRow = {
-  key: string;
-  name: string;
-  folder_path: string | null;
-  requests_total: number;
-  requests_success: number;
-  requests_failed: number;
-  total_tokens: number;
-  io_total_tokens: number;
-  input_tokens: number;
-  output_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_read_input_tokens: number;
-  avg_duration_ms: number | null;
-  avg_ttfb_ms: number | null;
-  avg_output_tokens_per_second: number | null;
-  cost_usd: number | null;
-};
-export type UsageDayHourRow = {
-  hour: number;
-  requests_total: number;
-  total_tokens: number;
-  io_total_tokens: number;
-};
-export type UsageDayRow = {
-  day: string;
-  requests_total: number;
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  cache_read_input_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_creation_5m_input_tokens: number;
-  cache_creation_1h_input_tokens: number;
-};
-export type UsageFolderOptionV1 = {
-  key: string;
-  name: string;
-  folder_path: string | null;
-  requests_total: number;
-  total_tokens: number;
-};
-export type UsageHourlyRow = {
-  day: string;
-  hour: number;
-  requests_total: number;
-  requests_with_usage: number;
-  requests_success: number;
-  requests_failed: number;
-  total_tokens: number;
-};
-export type UsageLeaderboardRow = {
-  key: string;
-  name: string;
-  folder_path: string | null;
-  requests_total: number;
-  requests_success: number;
-  requests_failed: number;
-  total_duration_ms: number;
-  first_request_created_at_ms: number | null;
-  last_request_created_at_ms: number | null;
-  last_request_completed_at_ms: number | null;
-  estimated_development_time_ms: number | null;
-  hourly_estimated_development_time_ms: number[] | null;
-  total_tokens: number;
-  io_total_tokens: number;
-  input_tokens: number;
-  output_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_read_input_tokens: number;
-  avg_duration_ms: number | null;
-  avg_ttfb_ms: number | null;
-  avg_output_tokens_per_second: number | null;
-  cost_usd: number | null;
-};
-export type UsageProviderCacheRateTrendRowV1 = {
-  day: string;
-  hour: number | null;
-  key: string;
-  name: string;
-  denom_tokens: number;
-  cache_read_input_tokens: number;
-  requests_success: number;
-};
-export type UsageProviderMetricsTrendRowV1 = {
-  day: string;
-  hour: number | null;
-  key: string;
-  name: string;
-  avg_duration_ms: number | null;
-  avg_ttfb_ms: number | null;
-  avg_output_tokens_per_second: number | null;
-  requests_success: number;
-};
-export type UsageProviderRow = {
-  cli_key: string;
-  provider_id: number;
-  provider_name: string;
-  requests_total: number;
-  requests_success: number;
-  requests_failed: number;
-  avg_duration_ms: number | null;
-  avg_ttfb_ms: number | null;
-  avg_output_tokens_per_second: number | null;
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  cache_read_input_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_creation_5m_input_tokens: number;
-  cache_creation_1h_input_tokens: number;
-};
-export type UsageQueryParams = {
-  period: string;
-  startTs: number | null;
-  endTs: number | null;
-  cliKey: string | null;
-  providerId: number | null;
-  folderKeys: string[] | null;
-  dayStartHour: number | null;
-  fullIdleGapMinutes: number | null;
-  sessionBreakGapMinutes: number | null;
-  excludeCx2CcGatewayBridge: boolean | null;
-};
-export type UsageSummary = {
-  requests_total: number;
-  requests_with_usage: number;
-  requests_success: number;
-  requests_failed: number;
-  cost_covered_success: number;
-  total_duration_ms: number;
-  avg_duration_ms: number | null;
-  avg_ttfb_ms: number | null;
-  avg_output_tokens_per_second: number | null;
-  input_tokens: number;
-  output_tokens: number;
-  io_total_tokens: number;
-  total_tokens: number;
-  cache_read_input_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_creation_5m_input_tokens: number;
-  cache_creation_1h_input_tokens: number;
-};
-export type WorkspaceApplyReport = {
-  cli_key: string;
-  from_workspace_id: number | null;
-  to_workspace_id: number;
-  applied_at: number;
-};
-export type WorkspaceEnabledPromptPreview = { name: string; excerpt: string };
-export type WorkspaceItemsPreview = {
-  from_enabled: string[];
-  to_enabled: string[];
-  added: string[];
-  removed: string[];
-};
-export type WorkspacePreview = {
-  cli_key: string;
-  from_workspace_id: number | null;
-  to_workspace_id: number;
-  prompts: WorkspacePromptsPreview;
-  mcp: WorkspaceItemsPreview;
-  skills: WorkspaceItemsPreview;
-};
-export type WorkspacePromptsPreview = {
-  from_enabled: WorkspaceEnabledPromptPreview | null;
-  to_enabled: WorkspaceEnabledPromptPreview | null;
-  will_change: boolean;
-};
-export type WorkspaceSummary = {
-  id: number;
-  cli_key: string;
-  name: string;
-  created_at: number;
-  updated_at: number;
-};
-export type WorkspacesListResult = { active_id: number | null; items: WorkspaceSummary[] };
-export type WslConfigureCliReport = { cli_key: string; ok: boolean; message: string };
-export type WslConfigureDistroReport = {
-  distro: string;
-  ok: boolean;
-  results: WslConfigureCliReport[];
-};
-export type WslConfigureReport = {
-  ok: boolean;
-  message: string;
-  distros: WslConfigureDistroReport[];
-};
-export type WslDetection = { detected: boolean; distros: string[] };
-export type WslDistroConfigStatus = {
-  distro: string;
-  claude: boolean;
-  codex: boolean;
-  gemini: boolean;
-  claude_mcp: boolean;
-  codex_mcp: boolean;
-  gemini_mcp: boolean;
-  claude_prompt: boolean;
-  codex_prompt: boolean;
-  gemini_prompt: boolean;
-};
-export type WslHostAddressMode = "auto" | "custom";
-export type WslTargetCli = { claude: boolean; codex: boolean; gemini: boolean };
+export type SettingsUpdate = { preferredPort: number; showHomeHeatmap: boolean | null; showHomeUsage: boolean | null; homeUsagePeriod: HomeUsagePeriod | null; gatewayListenMode: GatewayListenMode | null; gatewayCustomListenAddress: string | null; autoStart: boolean; startMinimized: boolean | null; trayEnabled: boolean | null; enableCliProxyStartupRecovery: boolean | null; logRetentionDays: number; requestLogRetentionDays: number | null; providerCooldownSeconds: number | null; providerBaseUrlPingCacheTtlSeconds: number | null; upstreamFirstByteTimeoutSeconds: number | null; upstreamStreamIdleTimeoutSeconds: number | null; upstreamRequestTimeoutNonStreamingSeconds: number | null; interceptAnthropicWarmupRequests: boolean | null; enableThinkingEffortConflictRectifier: boolean | null; enableThinkingSignatureRectifier: boolean | null; enableThinkingBudgetRectifier: boolean | null; enableGeminiFunctionIdRectifier: boolean | null; enableResponseInputRectifier: boolean | null; codexPriorityBillingSource: CodexPriorityBillingSource | null; enableBillingHeaderRectifier: boolean | null; enableClaudeMetadataUserIdInjection: boolean | null; enableCacheAnomalyMonitor: boolean | null; enableDebugLog: boolean | null; enableTaskCompleteNotify: boolean | null; enableNotificationSound: boolean | null; enableResponseFixer: boolean | null; responseFixerFixEncoding: boolean | null; responseFixerFixSseFormat: boolean | null; responseFixerFixTruncatedJson: boolean | null; verboseProviderError: boolean | null; failoverMaxAttemptsPerProvider: number; failoverMaxProvidersToTry: number; circuitBreakerFailureThreshold: number | null; circuitBreakerOpenDurationMinutes: number | null; updateReleasesUrl: string | null; wslAutoConfig: boolean | null; wslTargetCli: WslTargetCli | null; cliPriorityOrder: string[] | null; wslHostAddressMode: WslHostAddressMode | null; wslCustomHostAddress: string | null; codexHomeMode: CodexHomeMode | null; codexHomeOverride: string | null; codexOauthCompatibleProxyMode: boolean | null; cx2CcFallbackModelOpus: string | null; cx2CcFallbackModelSonnet: string | null; cx2CcFallbackModelHaiku: string | null; cx2CcFallbackModelMain: string | null; cx2CcModelReasoningEffort: string | null; cx2CcServiceTier: string | null; cx2CcDisableResponseStorage: boolean | null; cx2CcEnableReasoningToThinking: boolean | null; cx2CcDropStopSequences: boolean | null; cx2CcCleanSchema: boolean | null; cx2CcFilterBatchTool: boolean | null; upstreamProxyEnabled: boolean | null; upstreamProxyUrl: string | null; upstreamProxyUsername: string | null; upstreamProxyPassword: SensitiveStringUpdate | null }
+export type SettingsView = { schema_version: number; preferred_port: number; show_home_heatmap: boolean; show_home_usage: boolean; home_usage_period: HomeUsagePeriod; gateway_listen_mode: GatewayListenMode; gateway_custom_listen_address: string; wsl_auto_config: boolean; wsl_target_cli: WslTargetCli; cli_priority_order: string[]; wsl_host_address_mode: WslHostAddressMode; wsl_custom_host_address: string; codex_home_mode: CodexHomeMode; codex_home_override: string; codex_oauth_compatible_proxy_mode: boolean; auto_start: boolean; start_minimized: boolean; tray_enabled: boolean; enable_cli_proxy_startup_recovery: boolean; log_retention_days: number; request_log_retention_days: number; provider_cooldown_seconds: number; provider_base_url_ping_cache_ttl_seconds: number; upstream_first_byte_timeout_seconds: number; upstream_stream_idle_timeout_seconds: number; upstream_request_timeout_non_streaming_seconds: number; update_releases_url: string; failover_max_attempts_per_provider: number; failover_max_providers_to_try: number; circuit_breaker_failure_threshold: number; circuit_breaker_open_duration_minutes: number; enable_circuit_breaker_notice: boolean; verbose_provider_error: boolean; intercept_anthropic_warmup_requests: boolean; enable_thinking_effort_conflict_rectifier: boolean; enable_thinking_signature_rectifier: boolean; enable_thinking_budget_rectifier: boolean; enable_gemini_function_id_rectifier: boolean; enable_response_input_rectifier: boolean; codex_priority_billing_source: CodexPriorityBillingSource; enable_billing_header_rectifier: boolean; enable_codex_session_id_completion: boolean; enable_claude_metadata_user_id_injection: boolean; enable_cache_anomaly_monitor: boolean; enable_debug_log: boolean; enable_task_complete_notify: boolean; enable_notification_sound: boolean; enable_response_fixer: boolean; response_fixer_fix_encoding: boolean; response_fixer_fix_sse_format: boolean; response_fixer_fix_truncated_json: boolean; response_fixer_max_json_depth: number; response_fixer_max_fix_size: number; cx2cc_fallback_model_opus: string; cx2cc_fallback_model_sonnet: string; cx2cc_fallback_model_haiku: string; cx2cc_fallback_model_main: string; cx2cc_model_reasoning_effort: string; cx2cc_service_tier: string; cx2cc_disable_response_storage: boolean; cx2cc_enable_reasoning_to_thinking: boolean; cx2cc_drop_stop_sequences: boolean; cx2cc_clean_schema: boolean; cx2cc_filter_batch_tool: boolean; upstream_proxy_enabled: boolean; upstream_proxy_url: string; upstream_proxy_username: string; upstream_proxy_password_configured: boolean }
+export type SimpleCliInfo = { found: boolean; executable_path: string | null; version: string | null; error: string | null; shell: string | null; resolved_via: string }
+export type SkillImportIssue = { dir_name: string; error_code: string | null; message: string }
+export type SkillImportLocalBatchReport = { imported: InstalledSkillSummary[]; skipped: SkillImportIssue[]; failed: SkillImportIssue[] }
+export type SkillRepoSummary = { id: number; git_url: string; branch: string; enabled: boolean; created_at: number; updated_at: number }
+export type SkillUpdateInfo = { skill_id: number; has_update: boolean; installed_commit: string | null; latest_commit: string | null }
+export type SkillsPaths = { ssot_dir: string; repos_dir: string; cli_dir: string }
+export type SortModeActiveRow = { cli_key: string; mode_id: number | null; updated_at: number }
+export type SortModeProviderRow = { provider_id: number; enabled: boolean }
+export type SortModeSummary = { id: number; name: string; created_at: number; updated_at: number }
+export type TargetCliKey = "claude" | "codex" | "gemini"
+export type UiContribution = { id: string; title?: string | null; order?: number | null; schema: HostRenderedSchema; when?: string | null }
+export type UsageDayDetailParams = { day: string; cliKey: string | null; providerId: number | null; folderLimit: number | null; folderKeys: string[] | null; dayStartHour: number | null; excludeCx2CcGatewayBridge: boolean | null }
+export type UsageDayDetailV1 = { day: string; folders: UsageDayFolderRow[]; hours: UsageDayHourRow[] }
+export type UsageDayFolderRow = { key: string; name: string; folder_path: string | null; requests_total: number; requests_success: number; requests_failed: number; total_tokens: number; io_total_tokens: number; input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; avg_duration_ms: number | null; avg_ttfb_ms: number | null; avg_output_tokens_per_second: number | null; cost_usd: number | null }
+export type UsageDayHourRow = { hour: number; requests_total: number; total_tokens: number; io_total_tokens: number }
+export type UsageDayRow = { day: string; requests_total: number; input_tokens: number; output_tokens: number; total_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; cache_creation_5m_input_tokens: number; cache_creation_1h_input_tokens: number }
+export type UsageFolderOptionV1 = { key: string; name: string; folder_path: string | null; requests_total: number; total_tokens: number }
+export type UsageHourlyRow = { day: string; hour: number; requests_total: number; requests_with_usage: number; requests_success: number; requests_failed: number; total_tokens: number }
+export type UsageLeaderboardRow = { key: string; name: string; folder_path: string | null; requests_total: number; requests_success: number; requests_failed: number; total_duration_ms: number; first_request_created_at_ms: number | null; last_request_created_at_ms: number | null; last_request_completed_at_ms: number | null; estimated_development_time_ms: number | null; hourly_estimated_development_time_ms: number[] | null; total_tokens: number; io_total_tokens: number; input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; avg_duration_ms: number | null; avg_ttfb_ms: number | null; avg_output_tokens_per_second: number | null; cost_usd: number | null }
+export type UsageProviderCacheRateTrendRowV1 = { day: string; hour: number | null; key: string; name: string; denom_tokens: number; cache_read_input_tokens: number; requests_success: number }
+export type UsageProviderMetricsTrendRowV1 = { day: string; hour: number | null; key: string; name: string; avg_duration_ms: number | null; avg_ttfb_ms: number | null; avg_output_tokens_per_second: number | null; requests_success: number }
+export type UsageProviderRow = { cli_key: string; provider_id: number; provider_name: string; requests_total: number; requests_success: number; requests_failed: number; avg_duration_ms: number | null; avg_ttfb_ms: number | null; avg_output_tokens_per_second: number | null; input_tokens: number; output_tokens: number; total_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; cache_creation_5m_input_tokens: number; cache_creation_1h_input_tokens: number }
+export type UsageQueryParams = { period: string; startTs: number | null; endTs: number | null; cliKey: string | null; providerId: number | null; folderKeys: string[] | null; dayStartHour: number | null; fullIdleGapMinutes: number | null; sessionBreakGapMinutes: number | null; excludeCx2CcGatewayBridge: boolean | null }
+export type UsageSummary = { requests_total: number; requests_with_usage: number; requests_success: number; requests_failed: number; cost_covered_success: number; total_duration_ms: number; avg_duration_ms: number | null; avg_ttfb_ms: number | null; avg_output_tokens_per_second: number | null; input_tokens: number; output_tokens: number; io_total_tokens: number; total_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; cache_creation_5m_input_tokens: number; cache_creation_1h_input_tokens: number }
+export type WorkspaceApplyReport = { cli_key: string; from_workspace_id: number | null; to_workspace_id: number; applied_at: number }
+export type WorkspaceEnabledPromptPreview = { name: string; excerpt: string }
+export type WorkspaceItemsPreview = { from_enabled: string[]; to_enabled: string[]; added: string[]; removed: string[] }
+export type WorkspacePreview = { cli_key: string; from_workspace_id: number | null; to_workspace_id: number; prompts: WorkspacePromptsPreview; mcp: WorkspaceItemsPreview; skills: WorkspaceItemsPreview }
+export type WorkspacePromptsPreview = { from_enabled: WorkspaceEnabledPromptPreview | null; to_enabled: WorkspaceEnabledPromptPreview | null; will_change: boolean }
+export type WorkspaceSummary = { id: number; cli_key: string; name: string; created_at: number; updated_at: number }
+export type WorkspacesListResult = { active_id: number | null; items: WorkspaceSummary[] }
+export type WslConfigureCliReport = { cli_key: string; ok: boolean; message: string }
+export type WslConfigureDistroReport = { distro: string; ok: boolean; results: WslConfigureCliReport[] }
+export type WslConfigureReport = { ok: boolean; message: string; distros: WslConfigureDistroReport[] }
+export type WslDetection = { detected: boolean; distros: string[] }
+export type WslDistroConfigStatus = { distro: string; claude: boolean; codex: boolean; gemini: boolean; claude_mcp: boolean; codex_mcp: boolean; gemini_mcp: boolean; claude_prompt: boolean; codex_prompt: boolean; gemini_prompt: boolean }
+export type WslHostAddressMode = "auto" | "custom"
+export type WslTargetCli = { claude: boolean; codex: boolean; gemini: boolean }
 
 /** tauri-specta globals **/
 
-import { invoke as TAURI_INVOKE, Channel as TAURI_CHANNEL } from "@tauri-apps/api/core";
+import {
+	invoke as TAURI_INVOKE,
+	Channel as TAURI_CHANNEL,
+} from "@tauri-apps/api/core";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
 import { type WebviewWindow as __WebviewWindow__ } from "@tauri-apps/api/webviewWindow";
 
 type __EventObj__<T> = {
-  listen: (cb: TAURI_API_EVENT.EventCallback<T>) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
-  once: (cb: TAURI_API_EVENT.EventCallback<T>) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
-  emit: null extends T
-    ? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
-    : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
+	listen: (
+		cb: TAURI_API_EVENT.EventCallback<T>,
+	) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
+	once: (
+		cb: TAURI_API_EVENT.EventCallback<T>,
+	) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
+	emit: null extends T
+		? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
+		: (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
-export type Result<T, E> = { status: "ok"; data: T } | { status: "error"; error: E };
+export type Result<T, E> =
+	| { status: "ok"; data: T }
+	| { status: "error"; error: E };
 
-function __makeEvents__<T extends Record<string, any>>(mappings: Record<keyof T, string>) {
-  return new Proxy(
-    {} as unknown as {
-      [K in keyof T]: __EventObj__<T[K]> & {
-        (handle: __WebviewWindow__): __EventObj__<T[K]>;
-      };
-    },
-    {
-      get: (_, event) => {
-        const name = mappings[event as keyof T];
+function __makeEvents__<T extends Record<string, any>>(
+	mappings: Record<keyof T, string>,
+) {
+	return new Proxy(
+		{} as unknown as {
+			[K in keyof T]: __EventObj__<T[K]> & {
+				(handle: __WebviewWindow__): __EventObj__<T[K]>;
+			};
+		},
+		{
+			get: (_, event) => {
+				const name = mappings[event as keyof T];
 
-        return new Proxy((() => {}) as any, {
-          apply: (_, __, [window]: [__WebviewWindow__]) => ({
-            listen: (arg: any) => window.listen(name, arg),
-            once: (arg: any) => window.once(name, arg),
-            emit: (arg: any) => window.emit(name, arg),
-          }),
-          get: (_, command: keyof __EventObj__<any>) => {
-            switch (command) {
-              case "listen":
-                return (arg: any) => TAURI_API_EVENT.listen(name, arg);
-              case "once":
-                return (arg: any) => TAURI_API_EVENT.once(name, arg);
-              case "emit":
-                return (arg: any) => TAURI_API_EVENT.emit(name, arg);
-            }
-          },
-        });
-      },
-    }
-  );
+				return new Proxy((() => {}) as any, {
+					apply: (_, __, [window]: [__WebviewWindow__]) => ({
+						listen: (arg: any) => window.listen(name, arg),
+						once: (arg: any) => window.once(name, arg),
+						emit: (arg: any) => window.emit(name, arg),
+					}),
+					get: (_, command: keyof __EventObj__<any>) => {
+						switch (command) {
+							case "listen":
+								return (arg: any) => TAURI_API_EVENT.listen(name, arg);
+							case "once":
+								return (arg: any) => TAURI_API_EVENT.once(name, arg);
+							case "emit":
+								return (arg: any) => TAURI_API_EVENT.emit(name, arg);
+						}
+					},
+				});
+			},
+		},
+	);
 }
