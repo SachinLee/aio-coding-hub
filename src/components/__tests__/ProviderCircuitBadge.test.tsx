@@ -20,6 +20,7 @@ describe("components/ProviderCircuitBadge", () => {
             cli_key: "claude",
             provider_id: 1,
             provider_name: "P1",
+            model_id: null,
             displayState: "open",
             open_until: nowUnix + 10,
           },
@@ -27,6 +28,7 @@ describe("components/ProviderCircuitBadge", () => {
             cli_key: "claude",
             provider_id: 2,
             provider_name: "P2",
+            model_id: null,
             displayState: "open",
             open_until: null,
           },
@@ -34,6 +36,7 @@ describe("components/ProviderCircuitBadge", () => {
             cli_key: "codex",
             provider_id: 3,
             provider_name: "P3",
+            model_id: null,
             displayState: "open",
             open_until: nowUnix + 5,
           },
@@ -68,6 +71,7 @@ describe("components/ProviderCircuitBadge", () => {
             cli_key: "claude",
             provider_id: 1,
             provider_name: "P1",
+            model_id: null,
             displayState: "half_open",
             open_until: null,
           },
@@ -89,7 +93,7 @@ describe("components/ProviderCircuitBadge", () => {
     // 仅半开行时 popover 头部与分组不再称"熔断"，与触发器状态词一致。
     expect(screen.getByText("试探恢复列表 (1)")).toBeInTheDocument();
     expect(screen.queryByText(/个熔断/)).not.toBeInTheDocument();
-    expect(screen.getByText("1 个供应商")).toBeInTheDocument();
+    expect(screen.getByText("1 项")).toBeInTheDocument();
 
     const status = screen.getByText("试探恢复中");
     expect(status.className).toContain("amber");
@@ -110,6 +114,7 @@ describe("components/ProviderCircuitBadge", () => {
             cli_key: "claude",
             provider_id: 1,
             provider_name: "P1",
+            model_id: null,
             displayState: "open",
             open_until: nowUnix + 60,
           },
@@ -117,6 +122,7 @@ describe("components/ProviderCircuitBadge", () => {
             cli_key: "claude",
             provider_id: 2,
             provider_name: "P2",
+            model_id: null,
             displayState: "cooldown",
             open_until: nowUnix + 30,
           },
@@ -124,6 +130,7 @@ describe("components/ProviderCircuitBadge", () => {
             cli_key: "codex",
             provider_id: 3,
             provider_name: "P3",
+            model_id: null,
             displayState: "half_open",
             open_until: null,
           },
@@ -147,6 +154,61 @@ describe("components/ProviderCircuitBadge", () => {
     expect(screen.getAllByText(/^\d{2}:\d{2}$/)).toHaveLength(2);
   });
 
+  it("renders the provider scope and each model of the same provider as distinct rows", async () => {
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <ProviderCircuitBadge
+        rows={[
+          {
+            cli_key: "claude",
+            provider_id: 5,
+            provider_name: "P5",
+            model_id: null,
+            displayState: "open",
+            open_until: nowUnix + 60,
+          },
+          {
+            cli_key: "claude",
+            provider_id: 5,
+            provider_name: "P5",
+            model_id: "gpt-x",
+            displayState: "open",
+            open_until: nowUnix + 60,
+          },
+          {
+            cli_key: "claude",
+            provider_id: 5,
+            provider_name: "P5",
+            model_id: "deepseek-y",
+            displayState: "open",
+            open_until: nowUnix + 30,
+          },
+        ]}
+        onResetProvider={() => {}}
+        resettingProviderIds={new Set()}
+      />
+    );
+
+    // 三个熔断项：provider 全局 + 两个模型，不能被 provider_id 去重合并。
+    fireEvent.click(screen.getByRole("button", { name: "当前熔断 3" }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+
+    expect(screen.getByText("Provider 全局")).toBeInTheDocument();
+    expect(screen.getByText("模型 gpt-x")).toBeInTheDocument();
+    expect(screen.getByText("模型 deepseek-y")).toBeInTheDocument();
+    expect(screen.getByText("3 项")).toBeInTheDocument();
+
+    // 行 key 必须包含 model_id，否则 React 会因重复 key 报警。
+    const duplicateKeyWarning = errorSpy.mock.calls.some((call) =>
+      String(call[0]).includes("same key")
+    );
+    expect(duplicateKeyWarning).toBe(false);
+
+    errorSpy.mockRestore();
+  });
+
   it("auto closes popover when rows become empty", async () => {
     const nowUnix = Math.floor(Date.now() / 1000);
     const { rerender } = render(
@@ -156,6 +218,7 @@ describe("components/ProviderCircuitBadge", () => {
             cli_key: "claude",
             provider_id: 1,
             provider_name: "P1",
+            model_id: null,
             displayState: "open",
             open_until: nowUnix + 10,
           },

@@ -48,6 +48,8 @@ pub struct GatewayStatus {
 #[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct GatewayProviderCircuitStatus {
     pub provider_id: i64,
+    /// `None` for a provider-scoped row; `Some(model)` for a model-scoped row.
+    pub model_id: Option<String>,
     pub state: String,
     pub failure_count: u32,
     pub failure_threshold: u32,

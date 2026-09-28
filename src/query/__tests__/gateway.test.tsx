@@ -47,6 +47,7 @@ describe("query/gateway", () => {
     expect(
       getGatewayCircuitDerivedState({
         provider_id: 9,
+        model_id: null,
         state: "OPEN",
         failure_count: 5,
         failure_threshold: 5,
@@ -63,6 +64,7 @@ describe("query/gateway", () => {
     expect(
       getGatewayCircuitDerivedState({
         provider_id: 10,
+        model_id: null,
         state: "CLOSED",
         failure_count: 0,
         failure_threshold: 5,
@@ -81,6 +83,7 @@ describe("query/gateway", () => {
     expect(
       getGatewayCircuitDerivedState({
         provider_id: 11,
+        model_id: null,
         state: "HALF_OPEN",
         failure_count: 5,
         failure_threshold: 5,
@@ -100,6 +103,7 @@ describe("query/gateway", () => {
     expect(
       getGatewayCircuitDerivedState({
         provider_id: 12,
+        model_id: null,
         state: "HALF_OPEN",
         failure_count: 5,
         failure_threshold: 5,
@@ -118,6 +122,7 @@ describe("query/gateway", () => {
     expect(
       getGatewayCircuitDerivedState({
         provider_id: 13,
+        model_id: null,
         state: "CLOSED",
         failure_count: 0,
         failure_threshold: 5,
@@ -143,6 +148,7 @@ describe("query/gateway", () => {
     expect(
       getGatewayCircuitDerivedState({
         provider_id: 14,
+        model_id: null,
         state: "WEIRD_STATE",
         failure_count: 0,
         failure_threshold: 5,
@@ -158,6 +164,7 @@ describe("query/gateway", () => {
     const summary = summarizeGatewayCircuitRows([
       {
         provider_id: 1,
+        model_id: null,
         state: "OPEN",
         failure_count: 5,
         failure_threshold: 5,
@@ -166,6 +173,7 @@ describe("query/gateway", () => {
       },
       {
         provider_id: 2,
+        model_id: null,
         state: "CLOSED",
         failure_count: 0,
         failure_threshold: 5,
@@ -174,6 +182,7 @@ describe("query/gateway", () => {
       },
       {
         provider_id: 3,
+        model_id: null,
         state: "CLOSED",
         failure_count: 0,
         failure_threshold: 5,
@@ -182,6 +191,7 @@ describe("query/gateway", () => {
       },
       {
         provider_id: 4,
+        model_id: null,
         state: "HALF_OPEN",
         failure_count: 5,
         failure_threshold: 5,
@@ -213,6 +223,7 @@ describe("query/gateway", () => {
     const rows: GatewayProviderCircuitStatus[] = [
       {
         provider_id: 1,
+        model_id: null,
         state: "closed",
         failure_count: 0,
         failure_threshold: 5,
@@ -221,6 +232,7 @@ describe("query/gateway", () => {
       },
       {
         provider_id: 2,
+        model_id: null,
         state: "open",
         failure_count: 5,
         failure_threshold: 5,
@@ -245,6 +257,48 @@ describe("query/gateway", () => {
     expect(gatewayCircuitStatus).toHaveBeenCalledWith("claude");
     expect(result.current.circuitByProviderId[1]).toEqual(rows[0]);
     expect(result.current.circuitByProviderId[2]).toEqual(rows[1]);
+  });
+
+  it("summarizeGatewayCircuitRows keeps model rows out of the provider map", () => {
+    const summary = summarizeGatewayCircuitRows([
+      {
+        provider_id: 1,
+        model_id: null,
+        state: "CLOSED",
+        failure_count: 0,
+        failure_threshold: 5,
+        open_until: null,
+        cooldown_until: null,
+      },
+      {
+        provider_id: 1,
+        model_id: "gpt-x",
+        state: "OPEN",
+        failure_count: 5,
+        failure_threshold: 5,
+        open_until: 999,
+        cooldown_until: null,
+      },
+      {
+        provider_id: 1,
+        model_id: "deepseek-y",
+        state: "OPEN",
+        failure_count: 5,
+        failure_threshold: 5,
+        open_until: 999,
+        cooldown_until: null,
+      },
+    ]);
+
+    // Provider-level state must stay CLOSED even though two models are OPEN.
+    expect(summary.byProviderId[1]?.state).toBe("CLOSED");
+    expect(summary.byProviderId[1]?.model_id).toBeNull();
+    // Both model rows remain visible to attention consumers.
+    expect(summary.attentionRows.map(({ row }) => row.model_id)).toEqual([
+      "gpt-x",
+      "deepseek-y",
+    ]);
+    expect(summary.unavailableRows).toHaveLength(2);
   });
 
   it("useGatewayCircuitStatusQuery normalizes cliKey before cache key and service call", async () => {

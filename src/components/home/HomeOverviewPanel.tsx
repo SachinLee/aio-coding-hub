@@ -12,7 +12,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useNowUnix } from "../../hooks/useNowUnix";
-import { CIRCUIT_ROW_STATUS, type OpenCircuitRow } from "../ProviderCircuitBadge";
+import { CIRCUIT_ROW_STATUS, openCircuitRowKey, type OpenCircuitRow } from "../ProviderCircuitBadge";
 import type { GatewayActiveSession } from "../../services/gateway/gateway";
 import { readHomeOverviewLogsPrimaryLayoutFromStorage } from "../../services/home/homeOverviewLayout";
 import {
@@ -65,13 +65,23 @@ const PREVIEW_CIRCUITS: OpenCircuitRow[] = [
     cli_key: "claude",
     provider_id: 10001,
     provider_name: "Claude Main",
+    model_id: null,
     displayState: "open",
     open_until: Math.floor(Date.now() / 1000) + 12 * 60,
+  },
+  {
+    cli_key: "claude",
+    provider_id: 10001,
+    provider_name: "Claude Main",
+    model_id: "claude-sonnet-4",
+    displayState: "open",
+    open_until: Math.floor(Date.now() / 1000) + 7 * 60,
   },
   {
     cli_key: "codex",
     provider_id: 10002,
     provider_name: "Codex Fallback",
+    model_id: null,
     displayState: "cooldown",
     open_until: Math.floor(Date.now() / 1000) + 5 * 60,
   },
@@ -79,6 +89,7 @@ const PREVIEW_CIRCUITS: OpenCircuitRow[] = [
     cli_key: "gemini",
     provider_id: 10003,
     provider_name: "Gemini Mirror",
+    model_id: null,
     displayState: "half_open",
     open_until: null,
   },
@@ -317,7 +328,7 @@ function CircuitProvidersPanel({
 
           return (
             <div
-              key={`${row.cli_key}:${row.provider_id}`}
+              key={openCircuitRowKey(row)}
               className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/70 px-3 py-2 dark:border-border dark:bg-secondary/50"
             >
               <div className="min-w-0 flex flex-1 items-center gap-2.5">
@@ -325,11 +336,16 @@ function CircuitProvidersPanel({
                   cliKey={row.cli_key as CliKey}
                   className="h-4 w-4 shrink-0 rounded-[4px] object-contain"
                 />
-                <div
-                  className="truncate text-sm font-medium text-foreground"
-                  title={row.provider_name}
-                >
-                  {row.provider_name || "未知"}
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="truncate text-sm font-medium text-foreground"
+                    title={`${row.provider_name}${row.model_id ? ` / ${row.model_id}` : ""}`}
+                  >
+                    {row.provider_name || "未知"}
+                  </div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {row.model_id ? `模型 ${row.model_id}` : "Provider 全局"}
+                  </div>
                 </div>
               </div>
               <div className="shrink-0 text-xs">
@@ -706,7 +722,7 @@ function useHomeOverviewTabs({
   const openCircuitKeys = useMemo(
     () =>
       openCircuits
-        .map((row) => `${row.cli_key}:${row.provider_id}`)
+        .map(openCircuitRowKey)
         .sort((a, b) => a.localeCompare(b)),
     [openCircuits]
   );

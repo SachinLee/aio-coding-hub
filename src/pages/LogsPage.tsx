@@ -14,6 +14,7 @@ import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { PageHeader } from "../ui/PageHeader";
+import { Select } from "../ui/Select";
 import { Switch } from "../ui/Switch";
 import { TabList } from "../ui/TabList";
 import { useTraceStore } from "../services/gateway/traceStore";
@@ -22,6 +23,9 @@ const LOGS_PAGE_LIMIT = 200;
 const AUTO_REFRESH_INTERVAL_MS = 2000;
 const LOG_CLI_FILTER_ITEMS = cliFilterItemsWith("logs");
 
+// Keep the selected model as its original ID; only Select option values are encoded.
+const MODEL_FILTER_ALL = null;
+const MODEL_FILTER_UNKNOWN = "";
 type StatusPredicate = (status: number | null) => boolean;
 
 type LogsPageState = {
@@ -29,6 +33,7 @@ type LogsPageState = {
   statusFilter: string;
   errorCodeFilter: string;
   pathFilter: string;
+  modelFilter: string | null;
   autoRefresh: boolean;
   selectedLogId: number | null;
 };
@@ -38,6 +43,7 @@ type LogsPageAction =
   | { type: "setStatusFilter"; statusFilter: string }
   | { type: "setErrorCodeFilter"; errorCodeFilter: string }
   | { type: "setPathFilter"; pathFilter: string }
+  | { type: "setModelFilter"; modelFilter: string | null }
   | { type: "setAutoRefresh"; autoRefresh: boolean }
   | { type: "setSelectedLogId"; selectedLogId: number | null }
   | { type: "resetFilters" };
@@ -47,6 +53,7 @@ const initialLogsPageState: LogsPageState = {
   statusFilter: "",
   errorCodeFilter: "",
   pathFilter: "",
+  modelFilter: MODEL_FILTER_ALL,
   autoRefresh: true,
   selectedLogId: null,
 };
@@ -61,6 +68,8 @@ function logsPageReducer(state: LogsPageState, action: LogsPageAction): LogsPage
       return { ...state, errorCodeFilter: action.errorCodeFilter };
     case "setPathFilter":
       return { ...state, pathFilter: action.pathFilter };
+    case "setModelFilter":
+      return { ...state, modelFilter: action.modelFilter };
     case "setAutoRefresh":
       return { ...state, autoRefresh: action.autoRefresh };
     case "setSelectedLogId":
@@ -72,6 +81,7 @@ function logsPageReducer(state: LogsPageState, action: LogsPageAction): LogsPage
         statusFilter: "",
         errorCodeFilter: "",
         pathFilter: "",
+        modelFilter: MODEL_FILTER_ALL,
       };
   }
 }
@@ -107,12 +117,48 @@ function buildStatusPredicate(query: string): StatusPredicate | null {
   return null;
 }
 
+type ModelFilterableLog = { requested_model?: string | null };
+
+function matchesModelFilter(log: ModelFilterableLog, filter: string | null): boolean {
+  if (filter === MODEL_FILTER_ALL) return true;
+  const value = log.requested_model?.trim() ?? "";
+  if (filter === MODEL_FILTER_UNKNOWN) return value.length === 0;
+  return value === filter;
+}
+
+/**
+ * Model filter options are derived from the currently loaded rows, so the
+ * control never issues an extra request and always matches what is on screen.
+ */
+function buildModelFilterOptions(
+  logs: readonly ModelFilterableLog[],
+  activeRequests: readonly ModelFilterableLog[],
+  currentFilter: string | null
+): string[] {
+  const models = new Set<string>();
+  for (const row of [...logs, ...activeRequests]) {
+    const value = row.requested_model?.trim();
+    if (value) models.add(value);
+  }
+
+  // A selected model remains visible even after leaving the rolling window.
+  if (currentFilter) models.add(currentFilter);
+  return [...models].sort((a, b) => a.localeCompare(b));
+}
 export function LogsPage() {
   const { traces } = useTraceStore();
   const showCustomTooltip = true;
 
   const [state, dispatch] = useReducer(logsPageReducer, initialLogsPageState);
-  const { cliKey, statusFilter, errorCodeFilter, pathFilter, autoRefresh, selectedLogId } = state;
+  const {
+    cliKey,
+    statusFilter,
+    errorCodeFilter,
+    pathFilter,
+    modelFilter,
+    autoRefresh,
+    selectedLogId,
+  } = state;
   const setSelectedLogId = (selectedLogId: number | null) =>
     dispatch({ type: "setSelectedLogId", selectedLogId });
   const {
@@ -136,8 +182,8 @@ export function LogsPage() {
     statusFilter.trim().length > 0,
     errorCodeFilter.trim().length > 0,
     pathFilter.trim().length > 0,
+    modelFilter !== MODEL_FILTER_ALL,
   ].filter(Boolean).length;
-
   const filteredLogs = useMemo(() => {
     const errorNeedle = errorCodeFilter.trim().toLowerCase();
     const pathNeedle = pathFilter.trim().toLowerCase();
@@ -153,9 +199,10 @@ export function LogsPage() {
         const haystack = `${log.method} ${log.path}`.toLowerCase();
         if (!haystack.includes(pathNeedle)) return false;
       }
+      if (!matchesModelFilter(log, modelFilter)) return false;
       return true;
     });
-  }, [cliKey, errorCodeFilter, pathFilter, requestLogs, statusPredicate]);
+  }, [cliKey, errorCodeFilter, modelFilter, pathFilter, requestLogs, statusPredicate]);
   const filteredActiveRequests = useMemo(() => {
     const errorNeedle = errorCodeFilter.trim().toLowerCase();
     const pathNeedle = pathFilter.trim().toLowerCase();
@@ -168,9 +215,15 @@ export function LogsPage() {
         const haystack = `${request.method} ${request.path}`.toLowerCase();
         if (!haystack.includes(pathNeedle)) return false;
       }
+      if (!matchesModelFilter(request, modelFilter)) return false;
       return true;
     });
-  }, [activeRequests, cliKey, errorCodeFilter, pathFilter, statusPredicate]);
+  }, [activeRequests, cliKey, errorCodeFilter, modelFilter, pathFilter, statusPredicate]);
+  const modelFilterOptions = useMemo(
+    () => buildModelFilterOptions(requestLogs, activeRequests, modelFilter),
+    [activeRequests, modelFilter, requestLogs]
+  );
+
   const logsSummaryText =
     requestLogsAvailable === false
       ? undefined
@@ -179,7 +232,6 @@ export function LogsPage() {
         : requestLogsRefreshing
           ? `更新中… · 共 ${filteredLogs.length} / ${requestLogs.length} 条`
           : `共 ${filteredLogs.length} / ${requestLogs.length} 条`;
-
   function resetFilters() {
     dispatch({ type: "resetFilters" });
   }
@@ -281,6 +333,36 @@ export function LogsPage() {
             />
             <div className="text-[11px] leading-4 text-muted-foreground">
               按请求路径或方法路径组合模糊匹配
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              模型
+            </div>
+            <Select
+              aria-label="模型过滤"
+              value={modelFilter == null ? "all" : modelFilter === "" ? "unknown" : `model:${modelFilter}`}
+              onChange={(e) => {
+                const value = e.currentTarget.value;
+                dispatch({
+                  type: "setModelFilter",
+                  modelFilter: value === "all" ? null : value === "unknown" ? "" : value.slice(6),
+                });
+              }}
+              className="w-full"
+              disabled={requestLogsAvailable === false}
+            >
+              <option value="all">全部模型</option>
+              <option value="unknown">未识别模型</option>
+              {modelFilterOptions.map((value) => (
+                <option key={value} value={`model:${value}`}>
+                  {value}
+                </option>
+              ))}
+            </Select>
+            <div className="text-[11px] leading-4 text-muted-foreground">
+              按当前已加载日志的请求模型精确筛选
             </div>
           </div>
         </div>

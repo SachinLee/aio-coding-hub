@@ -2969,6 +2969,10 @@ export type GatewayLogEvent = {
 };
 export type GatewayProviderCircuitStatus = {
   provider_id: number;
+  /**
+   * `None` for a provider-scoped row; `Some(model)` for a model-scoped row.
+   */
+  model_id: string | null;
   state: string;
   failure_count: number;
   failure_threshold: number;

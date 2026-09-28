@@ -733,3 +733,123 @@ fn model_failure_does_not_open_another_model_or_the_provider() {
     cb.record_success_model(7, "gpt-x", now + 63);
     assert!(cb.should_allow_model(7, "gpt-x", now + 63).allow);
 }
+
+#[test]
+fn model_snapshots_only_return_non_inert_model_scoped_rows() {
+    let cb = CircuitBreaker::new(
+        CircuitBreakerConfig {
+            failure_threshold: 1,
+            open_duration_secs: 60,
+        },
+        HashMap::new(),
+        None,
+    );
+    let now = 1_000;
+
+    // Healthy models never surface as circuit rows.
+    assert!(cb.should_allow_model(7, "deepseek-y", now).allow);
+    assert!(cb.model_snapshots(&[7], now).is_empty());
+
+    cb.record_failure_model(7, "gpt-x", now);
+    let rows = cb.model_snapshots(&[7], now);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].provider_id, 7);
+    assert_eq!(rows[0].model_id, "gpt-x");
+    assert_eq!(rows[0].snapshot.state, CircuitState::Open);
+    assert_eq!(rows[0].snapshot.failure_count, 1);
+
+    // Provider filter and unknown provider must not leak other rows.
+    assert!(cb.model_snapshots(&[8], now).is_empty());
+    assert_eq!(cb.model_snapshots(&[7, 8], now).len(), 1);
+}
+
+#[test]
+fn model_snapshots_converge_expired_open_to_half_open() {
+    let cb = CircuitBreaker::new(
+        CircuitBreakerConfig {
+            failure_threshold: 1,
+            open_duration_secs: 60,
+        },
+        HashMap::new(),
+        None,
+    );
+    let now = 1_000;
+    cb.record_failure_model(7, "gpt-x", now);
+
+    let rows = cb.model_snapshots(&[7], now + 61);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].snapshot.state, CircuitState::HalfOpen);
+    assert_eq!(rows[0].snapshot.open_until, None);
+}
+
+#[test]
+fn model_snapshots_keep_provider_level_state_isolated() {
+    let cb = CircuitBreaker::new(
+        CircuitBreakerConfig {
+            failure_threshold: 1,
+            open_duration_secs: 60,
+        },
+        HashMap::new(),
+        None,
+    );
+    let now = 1_000;
+    cb.record_failure(7, now, None);
+
+    // Provider-level OPEN must not fabricate a model row, and reset clears the
+    // model rows together with the provider row.
+    assert!(cb.model_snapshots(&[7], now).is_empty());
+    cb.record_failure_model(7, "gpt-x", now);
+    assert_eq!(cb.model_snapshots(&[7], now).len(), 1);
+
+    cb.reset(7, now);
+    assert!(cb.model_snapshots(&[7], now).is_empty());
+    assert!(cb.should_allow_model(7, "gpt-x", now).allow);
+}
+
+#[test]
+fn model_snapshots_include_active_cooldown_and_drop_it_once_expired() {
+    let cb = CircuitBreaker::new(
+        CircuitBreakerConfig {
+            failure_threshold: 5,
+            open_duration_secs: 60,
+        },
+        HashMap::new(),
+        None,
+    );
+    let now = 1_000;
+
+    // Cooldown on a still-CLOSED model is a real non-healthy state and must be
+    // reported even though the circuit never opened.
+    cb.trigger_cooldown_model(7, "gpt-x", now, 30);
+    let rows = cb.model_snapshots(&[7], now);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].model_id, "gpt-x");
+    assert_eq!(rows[0].snapshot.state, CircuitState::Closed);
+    assert_eq!(rows[0].snapshot.cooldown_until, Some(now + 30));
+
+    // Once the cooldown expires the entry is inert again and stops rendering.
+    let later = cb.model_snapshots(&[7], now + 31);
+    assert!(later.is_empty());
+}
+
+#[test]
+fn model_snapshots_cooldown_matches_should_allow_model_denial() {
+    let cb = CircuitBreaker::new(
+        CircuitBreakerConfig {
+            failure_threshold: 5,
+            open_duration_secs: 60,
+        },
+        HashMap::new(),
+        None,
+    );
+    let now = 1_000;
+    cb.trigger_cooldown_model(7, "gpt-x", now, 30);
+
+    // While the snapshot reports the model, routing must deny it — the display
+    // entry and the actual gate can never disagree.
+    assert_eq!(cb.model_snapshots(&[7], now).len(), 1);
+    assert!(!cb.should_allow_model(7, "gpt-x", now).allow);
+
+    assert!(cb.model_snapshots(&[7], now + 31).is_empty());
+    assert!(cb.should_allow_model(7, "gpt-x", now + 31).allow);
+}

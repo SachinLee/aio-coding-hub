@@ -5,7 +5,7 @@ mod types;
 pub(crate) use types::MAX_FAILURE_TIMESTAMPS;
 pub use types::{
     CircuitBreakerConfig, CircuitChange, CircuitCheck, CircuitPersistedState, CircuitSnapshot,
-    CircuitState, CircuitTransition,
+    CircuitState, CircuitTransition, ModelCircuitStatus,
 };
 use types::{ProviderHealth, HALF_OPEN_SUCCESS_REQUIRED};
 
@@ -576,6 +576,62 @@ impl CircuitBreaker {
             ModelCircuitOp::Cooldown(cooldown_secs),
         )
         .after
+    }
+
+    /// Read-only snapshot of every non-inert model-scoped circuit.
+    ///
+    /// Only entries that are currently OPEN, HALF_OPEN, or in cooldown are
+    /// returned: a CLOSED model with no failure history is not a circuit state
+    /// the UI should display. Expired OPEN entries converge to HALF_OPEN using
+    /// the same rule as [`Self::should_allow_model`], without recording a
+    /// success or mutating persistence.
+    pub fn model_snapshots(&self, provider_ids: &[i64], now_unix: i64) -> Vec<ModelCircuitStatus> {
+        let cfg = self.read_config();
+        let now_u64 = now_unix as u64;
+        let mut guard = self.model_health.lock_or_recover();
+        let mut result = Vec::new();
+
+        for ((provider_id, model_id), entry) in guard.iter_mut() {
+            let provider_id = *provider_id;
+            let model_id = model_id.clone();
+            if provider_id <= 0 || !provider_ids.contains(&provider_id) || model_id.is_empty() {
+                continue;
+            }
+
+            if entry.state == CircuitState::Open
+                && entry
+                    .open_until
+                    .map(|until| now_unix >= until)
+                    .unwrap_or(true)
+            {
+                entry.state = CircuitState::HalfOpen;
+                entry.half_open_success_count = 0;
+                entry.open_until = None;
+                entry.updated_at = now_unix;
+            }
+
+            if let Some(until) = entry.cooldown_until {
+                if now_unix >= until {
+                    entry.cooldown_until = None;
+                }
+            }
+
+            let cooldown_active = entry
+                .cooldown_until
+                .map(|until| now_unix < until)
+                .unwrap_or(false);
+            if entry.state == CircuitState::Closed && !cooldown_active {
+                continue;
+            }
+
+            result.push(ModelCircuitStatus {
+                provider_id,
+                model_id,
+                snapshot: Self::snapshot_from_health(&cfg, entry, now_u64),
+            });
+        }
+
+        result
     }
 
     fn model_check(

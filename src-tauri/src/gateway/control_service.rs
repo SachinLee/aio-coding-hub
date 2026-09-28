@@ -187,6 +187,7 @@ impl GatewayControlService {
                     if expired {
                         return GatewayProviderCircuitStatus {
                             provider_id,
+                            model_id: None,
                             state: circuit_breaker::CircuitState::HalfOpen.as_str().to_string(),
                             failure_count,
                             failure_threshold,
@@ -197,6 +198,7 @@ impl GatewayControlService {
 
                     GatewayProviderCircuitStatus {
                         provider_id,
+                        model_id: None,
                         state: item.state.as_str().to_string(),
                         failure_count,
                         failure_threshold,
@@ -206,6 +208,7 @@ impl GatewayControlService {
                 } else {
                     GatewayProviderCircuitStatus {
                         provider_id,
+                        model_id: None,
                         state: circuit_breaker::CircuitState::Closed.as_str().to_string(),
                         failure_count: 0,
                         failure_threshold,

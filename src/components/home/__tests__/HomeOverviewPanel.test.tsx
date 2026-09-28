@@ -262,14 +262,16 @@ describe("components/home/HomeOverviewPanel", () => {
     const { onResetCircuitProvider } = renderPanel({ devPreviewEnabled: true });
 
     fireEvent.click(screen.getByRole("tab", { name: "熔断信息" }));
-    expect(screen.getByText("Claude Main")).toBeInTheDocument();
+    expect(screen.getAllByText("Claude Main")).toHaveLength(2);
+    expect(screen.getByText("模型 claude-sonnet-4")).toBeInTheDocument();
+    expect(screen.getAllByText("Provider 全局").length).toBeGreaterThan(0);
     expect(screen.getByText("Codex Fallback")).toBeInTheDocument();
     expect(screen.getByText("Gemini Mirror")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "预览熔断样式" })).not.toBeInTheDocument();
 
     expect(screen.getAllByRole("button", { name: "解除" })[0]).toBeDisabled();
     fireEvent.click(screen.getAllByRole("button", { name: "解除" })[0]);
-    expect(screen.getByText("Claude Main")).toBeInTheDocument();
+    expect(screen.getAllByText("Claude Main")).toHaveLength(2);
     expect(onResetCircuitProvider).not.toHaveBeenCalled();
   });
 
@@ -280,6 +282,7 @@ describe("components/home/HomeOverviewPanel", () => {
           cli_key: "claude",
           provider_id: 7,
           provider_name: "Real Claude Provider",
+          model_id: null,
           displayState: "open" as const,
           open_until: Math.floor(Date.now() / 1000) + 60,
         },
@@ -890,6 +893,7 @@ describe("components/home/HomeOverviewPanel", () => {
             cli_key: "claude",
             provider_id: 9,
             provider_name: "Claude New Circuit",
+            model_id: null,
             displayState: "open" as const,
             open_until: TEST_NOW_SECONDS + 60,
           },
@@ -918,6 +922,7 @@ describe("components/home/HomeOverviewPanel", () => {
           cli_key: "claude",
           provider_id: 9,
           provider_name: "Claude New Circuit",
+          model_id: null,
           displayState: "open" as const,
           open_until: Math.floor(Date.now() / 1000) + 60,
         },
@@ -992,6 +997,7 @@ describe("components/home/HomeOverviewPanel", () => {
           cli_key: "claude",
           provider_id: 9,
           provider_name: "Claude New Circuit",
+          model_id: null,
           displayState: "open" as const,
           open_until: Math.floor(Date.now() / 1000) + 60,
         },

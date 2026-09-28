@@ -38,6 +38,7 @@ describe("useHomeCircuitState", () => {
               ? [
                   {
                     provider_id: 44,
+                    model_id: null,
                     state: "OPEN",
                     failure_count: 3,
                     failure_threshold: 3,
@@ -70,6 +71,7 @@ describe("useHomeCircuitState", () => {
         cli_key: "grok",
         provider_id: 44,
         provider_name: "Grok upstream",
+        model_id: null,
         displayState: "open",
         open_until: 2_000,
       },
@@ -85,6 +87,7 @@ describe("useHomeCircuitState", () => {
               ? [
                   {
                     provider_id: 45,
+                    model_id: null,
                     state: "HALF_OPEN",
                     failure_count: 3,
                     failure_threshold: 3,
@@ -93,6 +96,7 @@ describe("useHomeCircuitState", () => {
                   },
                   {
                     provider_id: 44,
+                    model_id: null,
                     state: "OPEN",
                     failure_count: 3,
                     failure_threshold: 3,
@@ -124,6 +128,7 @@ describe("useHomeCircuitState", () => {
         cli_key: "grok",
         provider_id: 44,
         provider_name: "Grok upstream",
+        model_id: null,
         displayState: "open",
         open_until: 2_000,
       },
@@ -131,6 +136,7 @@ describe("useHomeCircuitState", () => {
         cli_key: "grok",
         provider_id: 45,
         provider_name: "Grok probe",
+        model_id: null,
         displayState: "half_open",
         open_until: null,
       },
@@ -146,6 +152,7 @@ describe("useHomeCircuitState", () => {
               ? [
                   {
                     provider_id: 44,
+                    model_id: null,
                     state: "HALF_OPEN",
                     failure_count: 3,
                     failure_threshold: 3,
@@ -168,6 +175,7 @@ describe("useHomeCircuitState", () => {
         cli_key: "grok",
         provider_id: 44,
         provider_name: "Grok upstream",
+        model_id: null,
         displayState: "half_open",
         open_until: null,
       },

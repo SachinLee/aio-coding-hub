@@ -67,6 +67,14 @@ pub struct CircuitSnapshot {
 }
 
 #[derive(Debug, Clone)]
+pub struct ModelCircuitStatus {
+    pub provider_id: i64,
+    /// Effective model key the breaker actually counts failures under.
+    pub model_id: String,
+    pub snapshot: CircuitSnapshot,
+}
+
+#[derive(Debug, Clone)]
 pub struct CircuitTransition {
     pub prev_state: CircuitState,
     pub next_state: CircuitState,

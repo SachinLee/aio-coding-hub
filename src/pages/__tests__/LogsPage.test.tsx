@@ -135,6 +135,7 @@ describe("pages/LogsPage", () => {
     expect(screen.getByPlaceholderText("例：499 / 524 / !200 / >=400")).toBeDisabled();
     expect(screen.getByPlaceholderText("例：GW_UPSTREAM_TIMEOUT")).toBeDisabled();
     expect(screen.getByPlaceholderText("例：/v1/messages")).toBeDisabled();
+    expect(screen.getByLabelText("模型过滤")).toBeDisabled();
   });
 
   it("shows validation error when status filter expression is invalid", () => {
@@ -419,6 +420,131 @@ describe("pages/LogsPage", () => {
 
     expect(screen.getByText("进行中")).toBeInTheDocument();
     expect(getDataRows(getTable())).toHaveLength(1);
+  });
+  it("filters logs by requested model", () => {
+    setTauriRuntime();
+    mockFeed({
+      logs: [
+        { id: 1, cli_key: "claude", status: 200, requested_model: "gpt-x" },
+        { id: 2, cli_key: "claude", status: 200, requested_model: "deepseek-y" },
+        { id: 3, cli_key: "claude", status: 200, requested_model: "gpt-x" },
+      ],
+    });
+    renderWithProviders(<LogsPage />);
+
+    expect(getDataRows(getTable())).toHaveLength(3);
+
+    fireEvent.change(screen.getByLabelText("模型过滤"), { target: { value: "model:gpt-x" } });
+    expect(getDataRows(getTable())).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "清空筛选" }));
+    expect(getDataRows(getTable())).toHaveLength(3);
+  });
+
+  it("offers an unknown-model option and filters in-flight requests by model", () => {
+    setTauriRuntime();
+    mockFeed({
+      logs: [
+        { id: 1, cli_key: "claude", status: 200, requested_model: null },
+        { id: 2, cli_key: "claude", status: 200, requested_model: "gpt-x" },
+      ],
+      activeRequests: [
+        {
+          trace_id: "trace-live",
+          cli_key: "claude",
+          session_id: null,
+          method: "POST",
+          path: "/v1/messages",
+          query: null,
+          requested_model: "deepseek-y",
+          created_at_ms: Date.now() - 1000,
+          last_activity_ms: Date.now(),
+          current_attempt: null,
+        },
+      ],
+    });
+    renderWithProviders(<LogsPage />);
+
+    const modelSelect = screen.getByLabelText("模型过滤");
+    expect(within(modelSelect).getByRole("option", { name: "未识别模型" })).toBeInTheDocument();
+    expect(within(modelSelect).getByRole("option", { name: "deepseek-y" })).toBeInTheDocument();
+
+    // The live row only survives when the model filter matches it; with no
+    // matching history the table body disappears entirely.
+    fireEvent.change(modelSelect, { target: { value: "model:deepseek-y" } });
+    expect(screen.getByText("进行中")).toBeInTheDocument();
+    expect(
+      screen.queryAllByTestId("request-log-row"),
+      "history rows must be filtered out"
+    ).toHaveLength(0);
+
+    fireEvent.change(modelSelect, { target: { value: "model:gpt-x" } });
+    expect(screen.queryByText("进行中")).not.toBeInTheDocument();
+    expect(getDataRows(getTable())).toHaveLength(1);
+  });
+
+  it("keeps the selected model visible and applied after a window refresh drops it", () => {
+    setTauriRuntime();
+    mockFeed({
+      logs: [
+        { id: 1, cli_key: "claude", status: 200, requested_model: "gpt-x" },
+        { id: 2, cli_key: "claude", status: 200, requested_model: "deepseek-y" },
+      ],
+    });
+    const view = renderWithProviders(<LogsPage />);
+
+    fireEvent.change(screen.getByLabelText("模型过滤"), { target: { value: "model:gpt-x" } });
+    expect(getDataRows(getTable())).toHaveLength(1);
+
+    // The rolling window no longer contains the selected model: the option must
+    // stay present (label stays truthful) and the filter must stay applied.
+    mockFeed({
+      logs: [{ id: 3, cli_key: "claude", status: 200, requested_model: "deepseek-y" }],
+    });
+    view.rerender(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter>
+          <LogsPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const modelSelect = screen.getByLabelText("模型过滤");
+    expect(modelSelect).toHaveValue("model:gpt-x");
+    expect(within(modelSelect).getByRole("option", { name: "gpt-x" })).toBeInTheDocument();
+  });
+
+  it("keeps the unknown selection after rows without a model leave the window", () => {
+    setTauriRuntime();
+    mockFeed({ logs: [{ id: 1, cli_key: "claude", status: 200, requested_model: null }] });
+    const view = renderWithProviders(<LogsPage />);
+    fireEvent.change(screen.getByLabelText("模型过滤"), { target: { value: "unknown" } });
+    expect(getDataRows(getTable())).toHaveLength(1);
+
+    mockFeed({ logs: [{ id: 2, cli_key: "claude", status: 200, requested_model: "gpt-x" }] });
+    view.rerender(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter><LogsPage /></MemoryRouter>
+      </QueryClientProvider>
+    );
+    const select = screen.getByLabelText("模型过滤");
+    expect(select).toHaveValue("unknown");
+    expect(within(select).getByRole("option", { name: "未识别模型" })).toBeInTheDocument();
+    expect(screen.getByText("没有符合筛选条件的代理记录")).toBeInTheDocument();
+  });
+
+  it("distinguishes a real model named unknown from the unknown-model bucket", () => {
+    setTauriRuntime();
+    mockFeed({ logs: [
+      { id: 1, cli_key: "claude", status: 200, requested_model: null },
+      { id: 2, cli_key: "claude", status: 200, requested_model: "unknown" },
+    ] });
+    renderWithProviders(<LogsPage />);
+    const select = screen.getByLabelText("模型过滤");
+    expect(within(select).getByRole("option", { name: "unknown" })).toHaveValue("model:unknown");
+    fireEvent.change(select, { target: { value: "model:unknown" } });
+    expect(getDataRows(getTable())).toHaveLength(1);
+    expect(select).toHaveValue("model:unknown");
   });
 
   it("shows empty state when no logs match filters", () => {

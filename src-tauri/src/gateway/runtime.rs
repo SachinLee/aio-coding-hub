@@ -76,6 +76,37 @@ mod tests {
 
         assert!(active_requests.snapshot().is_empty());
     }
+
+    #[test]
+    fn circuit_status_appends_model_rows_without_changing_provider_rows() {
+        let rt = tokio::runtime::Runtime::new().expect("runtime");
+        let session = Arc::new(session_manager::SessionManager::new());
+        let recent_errors = Arc::new(Mutex::new(RecentErrorCache::default()));
+        let runtime = GatewayRuntime::for_tests(&rt, session, recent_errors);
+        let now = 1_000;
+
+        // Tighten the threshold so one failure opens the model circuit.
+        runtime.update_circuit_config(1, 60);
+        runtime.circuit.record_failure_model(7, "gpt-x", now);
+
+        let rows = runtime.circuit_status(&[7], now);
+        assert_eq!(rows.len(), 2);
+
+        let provider_row = rows
+            .iter()
+            .find(|row| row.model_id.is_none())
+            .expect("provider row");
+        assert_eq!(provider_row.provider_id, 7);
+        assert_eq!(provider_row.state, "CLOSED");
+
+        let model_row = rows
+            .iter()
+            .find(|row| row.model_id.as_deref() == Some("gpt-x"))
+            .expect("model row");
+        assert_eq!(model_row.provider_id, 7);
+        assert_eq!(model_row.state, "OPEN");
+        assert_eq!(model_row.failure_count, 1);
+    }
 }
 
 impl<R: tauri::Runtime> GatewayAppState<R> {
@@ -205,7 +236,7 @@ impl GatewayRuntime {
         provider_ids: &[i64],
         now_unix: i64,
     ) -> Vec<GatewayProviderCircuitStatus> {
-        provider_ids
+        let mut rows: Vec<GatewayProviderCircuitStatus> = provider_ids
             .iter()
             .copied()
             .map(|provider_id| {
@@ -213,6 +244,7 @@ impl GatewayRuntime {
                 let snap = check.after;
                 GatewayProviderCircuitStatus {
                     provider_id,
+                    model_id: None,
                     state: snap.state.as_str().to_string(),
                     failure_count: snap.failure_count,
                     failure_threshold: snap.failure_threshold,
@@ -220,7 +252,29 @@ impl GatewayRuntime {
                     cooldown_until: snap.cooldown_until,
                 }
             })
-            .collect()
+            .collect();
+
+        // Model-scoped rows share the same wire shape; `model_id` distinguishes
+        // them so consumers can keep provider-level semantics untouched.
+        rows.extend(
+            self.circuit
+                .model_snapshots(provider_ids, now_unix)
+                .into_iter()
+                .map(|item| {
+                    let snap = item.snapshot;
+                    GatewayProviderCircuitStatus {
+                        provider_id: item.provider_id,
+                        model_id: Some(item.model_id),
+                        state: snap.state.as_str().to_string(),
+                        failure_count: snap.failure_count,
+                        failure_threshold: snap.failure_threshold,
+                        open_until: snap.open_until,
+                        cooldown_until: snap.cooldown_until,
+                    }
+                }),
+        );
+
+        rows
     }
 
     pub(crate) fn circuit_reset_provider(&self, provider_id: i64, now_unix: i64) {

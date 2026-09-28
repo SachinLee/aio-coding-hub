@@ -73,6 +73,8 @@ vi.mock("../../hooks/useCliProxyControls", () => ({
 describe("ui/Sidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Group expansion state is persisted; isolate every case from the previous one.
+    window.localStorage.clear();
     devPreviewRef.current = { enabled: false, setEnabled: vi.fn(), toggle: vi.fn() };
     themeRef.current = { theme: "system", resolvedTheme: "light", setTheme: vi.fn() };
     cliProxyMocks.current = {
@@ -181,9 +183,83 @@ describe("ui/Sidebar", () => {
       NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.to))
     );
 
+    // Items inside a collapsible group are only rendered once expanded, so this
+    // check covers the flat remainder and asserts the group's own affordance.
+    const groupedRoutes = new Set(
+      NAV_SECTIONS.flatMap((section) =>
+        (section.collapsibleGroups ?? []).flatMap((group) => group.items.map((item) => item.to))
+      )
+    );
+
     for (const item of NAV) {
+      if (groupedRoutes.has(item.to)) continue;
       expect(screen.getByRole("link", { name: item.label })).toBeInTheDocument();
     }
+
+    expect(screen.getByRole("button", { name: /工具/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps the tools group collapsed by default and reveals its links on demand", () => {
+    render(
+      <MemoryRouter>
+        <Sidebar />
+      </MemoryRouter>
+    );
+
+    const groupButton = screen.getByRole("button", { name: /工具/ });
+    expect(groupButton).toHaveAttribute("aria-expanded", "false");
+    expect(groupButton).not.toBeDisabled();
+    expect(document.getElementById(groupButton.getAttribute("aria-controls")!)).toHaveAttribute(
+      "hidden"
+    );
+    expect(screen.queryByRole("link", { name: "工作区" })).not.toBeInTheDocument();
+
+    fireEvent.click(groupButton);
+
+    expect(screen.getByRole("button", { name: /工具/ })).toHaveAttribute("aria-expanded", "true");
+    for (const label of ["工作区", "提示词", "MCP", "Skill"]) {
+      expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
+    }
+
+    // Non-grouped tools stay flat and visible regardless of the group state.
+    expect(screen.getByRole("link", { name: "请求日志" })).toBeInTheDocument();
+  });
+
+  it("persists the tools group expansion across remounts", () => {
+    const first = render(
+      <MemoryRouter>
+        <Sidebar />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /工具/ }));
+    expect(screen.getByRole("link", { name: "工作区" })).toBeInTheDocument();
+    first.unmount();
+
+    render(
+      <MemoryRouter>
+        <Sidebar />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("button", { name: /工具/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("link", { name: "工作区" })).toBeInTheDocument();
+  });
+
+  it("forces the tools group open when one of its routes is active", () => {
+    render(
+      <MemoryRouter initialEntries={["/mcp"]}>
+        <Sidebar />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("button", { name: /工具/ })).toHaveAttribute("aria-expanded", "true");
+    const group = screen.getByRole("button", { name: /工具/ });
+    expect(group).toBeDisabled();
+    expect(document.getElementById(group.getAttribute("aria-controls")!)).not.toHaveAttribute(
+      "hidden"
+    );
+    expect(screen.getByRole("link", { name: "MCP" })).toBeInTheDocument();
   });
 
   it("renders the GitHub link when no update candidate exists", () => {

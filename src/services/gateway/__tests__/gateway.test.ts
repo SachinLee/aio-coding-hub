@@ -84,6 +84,7 @@ describe("services/gateway/gateway", () => {
     const circuits: GatewayProviderCircuitStatus[] = [
       {
         provider_id: 1,
+        model_id: null,
         state: "OPEN",
         failure_count: 3,
         failure_threshold: 5,

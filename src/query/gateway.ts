@@ -42,6 +42,17 @@ export type GatewayCircuitRowsSummary = {
   earliestUnavailableUntil: number | null;
 };
 
+
+/**
+ * A status row is model-scoped when it carries a non-empty `model_id`;
+ * provider-scoped rows leave it null. Keeping this check in one place prevents
+ * provider-level consumers from accidentally consuming model rows.
+ */
+export function isModelCircuitRow(row: GatewayProviderCircuitStatus): boolean {
+  // Fail closed: anything carrying a model_id (even an unexpected empty one) is
+  // treated as model-scoped so it can never overwrite a provider row.
+  return row.model_id != null;
+}
 function normalizeGatewayCircuitUnix(value: number | null | undefined) {
   return value != null && Number.isFinite(value) ? value : null;
 }
@@ -89,8 +100,11 @@ export function summarizeGatewayCircuitRows(
   let hasUnavailableWithoutUntil = false;
 
   for (const row of rows ?? []) {
-    byProviderId[row.provider_id] = row;
-
+    // Only provider-scoped rows define a provider's overall circuit. Model-scoped
+    // rows share the provider_id but must never overwrite provider-level state.
+    if (!isModelCircuitRow(row)) {
+      byProviderId[row.provider_id] = row;
+    }
     const derived = getGatewayCircuitDerivedState(row);
     if (derived.displayState === "healthy") continue;
 

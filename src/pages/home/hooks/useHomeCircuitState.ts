@@ -99,6 +99,8 @@ export function useHomeCircuitState(): HomeCircuitState {
           cli_key: spec.cliKey,
           provider_id: row.provider_id,
           provider_name: providerNameById[row.provider_id] ?? "未知",
+          // 熔断器实际使用的模型 key；provider 行保持 null。
+          model_id: row.model_id ?? null,
           displayState,
           // half_open 行无 until 语义，恒为 null。
           open_until: displayState === "half_open" ? null : unavailableUntil,
@@ -111,9 +113,16 @@ export function useHomeCircuitState(): HomeCircuitState {
       const bUntil = b.open_until ?? Number.POSITIVE_INFINITY;
       if (aUntil !== bUntil) return aUntil - bUntil;
       if (a.cli_key !== b.cli_key) return a.cli_key.localeCompare(b.cli_key);
-      return a.provider_name.localeCompare(b.provider_name);
+      if (a.provider_name !== b.provider_name) {
+        return a.provider_name.localeCompare(b.provider_name);
+      }
+      // 同一 provider 内 provider 行在前，模型行按 key 稳定排序。
+      if (a.model_id == null || b.model_id == null) {
+        if (a.model_id === b.model_id) return 0;
+        return a.model_id == null ? -1 : 1;
+      }
+      return a.model_id.localeCompare(b.model_id);
     });
-
     return rows;
   }, [
     claudeCircuitSummary.attentionRows,

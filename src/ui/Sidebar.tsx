@@ -1,9 +1,10 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
-import { NavLink } from "react-router-dom";
+import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   Boxes,
+  ChevronRight,
   Command,
   Cpu,
   FileText,
@@ -35,6 +36,11 @@ import { CliProxyConflictDialog } from "../components/cli-proxy/CliProxyConflict
 import { openDesktopUrl } from "../services/desktop/opener";
 import { Switch } from "./Switch";
 import { cn } from "../utils/cn";
+import {
+  readSidebarNavGroupStateFromStorage,
+  writeSidebarNavGroupStateToStorage,
+  type SidebarNavGroupState,
+} from "./sidebarToolsGroup";
 
 type NavItem = {
   to: string;
@@ -43,11 +49,32 @@ type NavItem = {
   theme: string;
 };
 
+type CollapsibleNavGroup = {
+  /** Stable id used as the persisted expand/collapse map key. */
+  id: string;
+  label: string;
+  /** References existing `items` entries so routes are never duplicated. */
+  items: NavItem[];
+};
+
 type NavSection = {
   id: string;
   label: string;
   items: NavItem[];
+  /**
+   * Optional grouped presentation for the section. Items listed here render
+   * inside a collapsible group and are omitted from the flat remainder, while
+   * `items` itself stays flat for `NAV` and existing consumers.
+   */
+  collapsibleGroups?: CollapsibleNavGroup[];
 };
+
+const TOOL_GROUP_ITEMS: NavItem[] = [
+  { to: "/workspaces", label: "工作区", icon: Layers, theme: "emerald" },
+  { to: "/prompts", label: "提示词", icon: Pencil, theme: "amber" },
+  { to: "/mcp", label: "MCP", icon: Command, theme: "indigo" },
+  { to: "/skills", label: "Skill", icon: Cpu, theme: "pink" },
+];
 
 const NAV_SECTIONS: NavSection[] = [
   {
@@ -65,14 +92,18 @@ const NAV_SECTIONS: NavSection[] = [
     id: "tools",
     label: "TOOLS",
     items: [
-      { to: "/workspaces", label: "工作区", icon: Layers, theme: "emerald" },
-      { to: "/prompts", label: "提示词", icon: Pencil, theme: "amber" },
-      { to: "/mcp", label: "MCP", icon: Command, theme: "indigo" },
-      { to: "/skills", label: "Skill", icon: Cpu, theme: "pink" },
+      ...TOOL_GROUP_ITEMS,
       { to: "/plugins", label: "插件", icon: Puzzle, theme: "emerald" },
       { to: "/usage", label: "用量", icon: TrendingDown, theme: "orange" },
       { to: "/logs", label: "请求日志", icon: FileText, theme: "slate" },
       { to: "/cli-manager", label: "CLI 管理", icon: Wrench, theme: "sky" },
+    ],
+    collapsibleGroups: [
+      {
+        id: "tools",
+        label: "工具",
+        items: TOOL_GROUP_ITEMS,
+      },
     ],
   },
   {
@@ -165,7 +196,107 @@ function SidebarHeader({
   );
 }
 
+
+// Shared nav-link styling so flat items and grouped items cannot drift apart.
+function navLinkClassName(isActive: boolean) {
+  return cn(
+    "group nav-link-item relative flex items-center gap-3 rounded-lg px-3 py-2 font-display text-[13px] font-semibold border border-transparent",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/35 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
+    isActive ? "sidebar-active-item" : "text-sidebar-foreground hover:bg-sidebar-accent"
+  );
+}
+
+function NavItemLink({ item }: { item: NavItem }) {
+  return (
+    <NavLink
+      to={item.to}
+      className={({ isActive }) => navLinkClassName(isActive)}
+      end={item.to === "/"}
+    >
+      {({ isActive }) => (
+        <>
+          <item.icon
+            className={cn(
+              "h-4 w-4 shrink-0 transition-opacity",
+              isActive ? "opacity-100 text-primary-foreground" : "opacity-70 group-hover:opacity-100"
+            )}
+          />
+          <span className="truncate">{item.label}</span>
+        </>
+      )}
+    </NavLink>
+  );
+}
+
+/**
+ * Collapsible group: the label is a real button with `aria-expanded`, and the
+ * child links keep the same NavLink semantics as flat items. The group is forced
+ * open while one of its routes is active so a deep link is never hidden.
+ */
+function CollapsibleNavGroupSection({
+  group,
+  isOpen,
+  isForcedOpen,
+  onToggle,
+}: {
+  group: CollapsibleNavGroup;
+  isOpen: boolean;
+  isForcedOpen: boolean;
+  onToggle: (groupId: string, next: boolean) => void;
+}) {
+  const expanded = isForcedOpen || isOpen;
+  const panelId = `sidebar-group-${group.id}`;
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        disabled={isForcedOpen}
+        title={isForcedOpen ? "当前页面位于工具组" : undefined}
+        onClick={() => onToggle(group.id, !expanded)}
+        className={cn(
+          "group flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2 font-display text-[13px] font-semibold text-sidebar-foreground",
+          "hover:bg-sidebar-accent disabled:cursor-default disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/35 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+        )}
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={cn("h-4 w-4 shrink-0 transition-transform", expanded && "rotate-90")}
+        />
+        <span className="truncate">{group.label}</span>
+        <span
+          aria-hidden="true"
+          className="ml-auto text-[11px] font-medium text-muted-foreground/80"
+        >
+          {group.items.length}
+        </span>
+      </button>
+
+      <div id={panelId} hidden={!expanded} className="space-y-1 pl-3">
+        {group.items.map((item) => (
+          <NavItemLink key={item.to} item={item} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SidebarNavigation() {
+  const [groupState, setGroupState] = useState<SidebarNavGroupState>(() =>
+    readSidebarNavGroupStateFromStorage()
+  );
+
+  // Compute next state outside the updater so the storage write is a side effect
+  // of the event handler, not of a state updater (StrictMode may call updaters
+  // twice, which would duplicate the write).
+  function toggleGroup(groupId: string, next: boolean) {
+    const updated = { ...groupState, [groupId]: next };
+    setGroupState(updated);
+    writeSidebarNavGroupStateToStorage(updated);
+  }
+
   return (
     <nav
       aria-label="Main navigation"
@@ -173,6 +304,9 @@ function SidebarNavigation() {
     >
       {NAV_SECTIONS.map((section) => {
         const headingId = `sidebar-section-${section.id}`;
+        const groups = section.collapsibleGroups ?? [];
+        const groupedRoutes = new Set(groups.flatMap((group) => group.items.map((item) => item.to)));
+        const flatItems = section.items.filter((item) => !groupedRoutes.has(item.to));
 
         return (
           <section key={section.id} aria-labelledby={headingId} className="space-y-1">
@@ -183,35 +317,16 @@ function SidebarNavigation() {
               {section.label}
             </h2>
             <div className="space-y-1 rounded-xl p-1">
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    cn(
-                      "group nav-link-item relative flex items-center gap-3 rounded-lg px-3 py-2 font-display text-[13px] font-semibold border border-transparent",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/35 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
-                      isActive
-                        ? "sidebar-active-item"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent"
-                    )
-                  }
-                  end={item.to === "/"}
-                >
-                  {({ isActive }) => (
-                    <>
-                      <item.icon
-                        className={cn(
-                          "h-4 w-4 shrink-0 transition-opacity",
-                          isActive
-                            ? "opacity-100 text-primary-foreground"
-                            : "opacity-70 group-hover:opacity-100"
-                        )}
-                      />
-                      <span className="truncate">{item.label}</span>
-                    </>
-                  )}
-                </NavLink>
+              {groups.map((group) => (
+                <GroupedNavGroup
+                  key={group.id}
+                  group={group}
+                  isOpen={groupState[group.id] ?? false}
+                  onToggle={toggleGroup}
+                />
+              ))}
+              {flatItems.map((item) => (
+                <NavItemLink key={item.to} item={item} />
               ))}
             </div>
           </section>
@@ -220,6 +335,36 @@ function SidebarNavigation() {
     </nav>
   );
 }
+
+function GroupedNavGroup({
+  group,
+  isOpen,
+  onToggle,
+}: {
+  group: CollapsibleNavGroup;
+  isOpen: boolean;
+  onToggle: (groupId: string, next: boolean) => void;
+}) {
+  // Force the group open while one of its routes is active.
+  const groupActive = useLocation().pathname;
+  const isForcedOpen = group.items.some((item) => isRouteActive(groupActive, item.to));
+
+  return (
+    <CollapsibleNavGroupSection
+      group={group}
+      isOpen={isOpen}
+      isForcedOpen={isForcedOpen}
+      onToggle={onToggle}
+    />
+  );
+}
+
+/** Matches a nav target against the current path honoring the `/` root special case. */
+function isRouteActive(pathname: string, to: string): boolean {
+  if (to === "/") return pathname === "/";
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
 
 function GatewayStatusRow({
   gatewayAriaLabel,

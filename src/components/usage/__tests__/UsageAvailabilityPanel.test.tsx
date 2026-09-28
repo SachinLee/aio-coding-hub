@@ -196,6 +196,7 @@ describe("buildAvailabilityTimeline", () => {
     const circuitMap: Record<number, GatewayProviderCircuitStatus> = {
       1: {
         provider_id: 1,
+        model_id: null,
         state: "OPEN",
         failure_count: 5,
         failure_threshold: 3,

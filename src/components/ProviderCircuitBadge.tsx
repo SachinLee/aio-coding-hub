@@ -12,11 +12,18 @@ export type OpenCircuitRow = {
   cli_key: CliKey;
   provider_id: number;
   provider_name: string;
+  /** `null` for a provider-scoped row; effective model key for a model row. */
+  model_id: string | null;
   displayState: Exclude<CircuitDisplayState, "healthy">;
-  // Unix seconds until provider becomes available again (open / cooldown 行)。
+  // Unix seconds until the scope becomes available again (open / cooldown 行)。
   // half_open 行无 until 语义，恒为 null。
   open_until: number | null;
 };
+
+/** Stable row identity: one provider can have provider-scoped and many model rows. */
+export function openCircuitRowKey(row: OpenCircuitRow): string {
+  return `${row.cli_key}:${row.provider_id}:${row.model_id ?? ""}`;
+}
 
 // 主页熔断徽章 popover 与概览“熔断信息”面板共用的行状态词/配色，防止两处漂移。
 export const CIRCUIT_ROW_STATUS: Record<
@@ -130,7 +137,8 @@ export function ProviderCircuitBadge({
                 {cliShortLabel(cliKey)}
               </span>
               <span className="text-xs text-muted-foreground">
-                {groupedByCli[cliKey].length} 个供应商
+                {/* 中性计数：provider 与 model 行都可能出现，且仅半开行时不应称“熔断”。 */}
+                {groupedByCli[cliKey].length} 项
               </span>
             </div>
             <div className="space-y-2">
@@ -146,15 +154,18 @@ export function ProviderCircuitBadge({
                 const isResetting = resettingProviderIds.has(row.provider_id);
                 return (
                   <div
-                    key={`${row.cli_key}:${row.provider_id}`}
+                    key={openCircuitRowKey(row)}
                     className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/50 dark:bg-secondary/50 px-3 py-2 transition-colors hover:bg-secondary dark:hover:bg-secondary"
                   >
                     <div className="min-w-0 flex-1">
                       <div
                         className="truncate text-sm font-medium text-secondary-foreground"
-                        title={row.provider_name}
+                        title={`${row.provider_name}${row.model_id ? ` / ${row.model_id}` : ""}`}
                       >
                         {row.provider_name || "未知"}
+                      </div>
+                      <div className="truncate text-[11px] text-muted-foreground">
+                        {row.model_id ? `模型 ${row.model_id}` : "Provider 全局"}
                       </div>
                     </div>
                     <div className="shrink-0 text-xs">
