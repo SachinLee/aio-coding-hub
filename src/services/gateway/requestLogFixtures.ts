@@ -55,6 +55,7 @@ export function createRequestLogSummary(
   return {
     id: 1,
     trace_id: "trace-1",
+    client_identity: "unknown",
     session_id: null,
     method: "POST",
     path: "/v1/messages",
@@ -110,6 +111,7 @@ export function createRequestLogDetail(
     id: 1,
     trace_id: "trace-1",
     cli_key: "claude",
+    client_identity: "unknown",
     session_id: null,
     method: "POST",
     path: "/v1/messages",

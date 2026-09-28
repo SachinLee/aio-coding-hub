@@ -104,10 +104,15 @@ export function normalizeRequestLogTraceIdOrNull(
   }
 }
 
+function normalizeClientIdentity(value: string): string {
+  return value.trim() || "unknown";
+}
+
 function toRequestLogSummary(value: GeneratedRequestLogSummary): RequestLogSummary {
   return {
     ...value,
     cli_key: toCliKey(value.cli_key, "request_logs_list.cli_key"),
+    client_identity: normalizeClientIdentity(value.client_identity),
   };
 }
 
@@ -115,6 +120,7 @@ function toRequestLogDetail(value: GeneratedRequestLogDetail): RequestLogDetail 
   return {
     ...value,
     cli_key: toCliKey(value.cli_key, "request_log_get.cli_key"),
+    client_identity: normalizeClientIdentity(value.client_identity),
   };
 }
 

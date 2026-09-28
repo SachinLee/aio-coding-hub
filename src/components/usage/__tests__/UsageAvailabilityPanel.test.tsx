@@ -13,6 +13,7 @@ function makeLog(
     id: 1,
     trace_id: "t1",
     cli_key: "claude" as CliKey,
+    client_identity: "unknown",
     session_id: null,
     method: "POST",
     path: "/v1/messages",

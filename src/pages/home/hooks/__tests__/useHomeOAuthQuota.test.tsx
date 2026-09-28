@@ -85,6 +85,7 @@ function makeRequestLog(
     id: partial.id,
     trace_id: partial.trace_id ?? `trace-${partial.id}`,
     cli_key: partial.cli_key ?? "codex",
+    client_identity: partial.client_identity ?? "unknown",
     session_id: partial.session_id ?? null,
     method: partial.method ?? "POST",
     path: partial.path ?? "/v1/messages",

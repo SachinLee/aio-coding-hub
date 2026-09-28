@@ -117,6 +117,7 @@ fn request_log_insert_from_args(
     let super::RequestLogEnqueueArgs {
         trace_id,
         cli_key,
+        client_identity,
         session_id,
         method,
         path,
@@ -159,6 +160,11 @@ fn request_log_insert_from_args(
     Some(request_logs::RequestLogInsert {
         trace_id,
         cli_key,
+        client_identity: if client_identity.trim().is_empty() {
+            crate::gateway::client_identity::CLIENT_IDENTITY_UNKNOWN.to_string()
+        } else {
+            truncate_chars(client_identity, REQUEST_LOG_SHORT_TEXT_MAX_CHARS)
+        },
         session_id: bound_optional_chars(session_id, REQUEST_LOG_SHORT_TEXT_MAX_CHARS),
         method: truncate_chars(method, REQUEST_LOG_METHOD_MAX_CHARS),
         path: truncate_chars(path, REQUEST_LOG_PATH_MAX_CHARS),
@@ -198,6 +204,7 @@ fn log_hook_message_from_args(args: &super::RequestLogEnqueueArgs) -> String {
     serde_json::json!({
         "traceId": args.trace_id,
         "cliKey": args.cli_key,
+        "clientIdentity": args.client_identity,
         "sessionId": args.session_id,
         "method": args.method,
         "path": args.path,
@@ -225,6 +232,11 @@ fn apply_log_hook_message_to_args(args: &mut super::RequestLogEnqueueArgs, messa
         .get("sessionId")
         .and_then(Value::as_str)
         .map(str::to_string);
+    args.client_identity = obj
+        .get("clientIdentity")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| args.client_identity.clone());
     args.method = obj
         .get("method")
         .and_then(Value::as_str)
@@ -642,6 +654,7 @@ WHERE trace_id = ?1
         super::super::RequestLogEnqueueArgs {
             trace_id: "t".to_string(),
             cli_key: "claude".to_string(),
+            client_identity: "unknown".to_string(),
             session_id: None,
             method: "POST".to_string(),
             path: "/v1/messages".to_string(),

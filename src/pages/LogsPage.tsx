@@ -3,7 +3,9 @@
 // - Backend commands: `request_logs_list_all`, `request_logs_list_after_id_all`, `request_log_get`, `request_attempt_logs_by_trace_id`.
 
 import { useMemo, useReducer } from "react";
-import { HomeRequestLogsPanel } from "../components/home/HomeRequestLogsPanel";
+import { RefreshCw } from "lucide-react";
+import { cn } from "../utils/cn";
+import { RequestLogsTable } from "../components/home/RequestLogsTable";
 import { RequestLogDetailDialog } from "../components/home/RequestLogDetailDialog";
 import { cliFilterItemsWith, type CliFilterKey } from "../constants/clis";
 import { GatewayErrorCodes } from "../constants/gatewayErrorCodes";
@@ -284,27 +286,45 @@ export function LogsPage() {
         </div>
       </Card>
 
-      <HomeRequestLogsPanel
-        displayOptions={{
-          customTooltip: showCustomTooltip,
-          openLogsPageButton: false,
-          compactModeToggle: false,
-        }}
-        title="代理记录列表"
-        summaryTextOverride={logsSummaryText}
-        compactModeOverride={false}
-        emptyStateTitle={activeFilterCount > 0 ? "没有符合筛选条件的代理记录" : "当前没有代理记录"}
-        traces={traces}
-        activeRequests={filteredActiveRequests}
-        requestLogs={filteredLogs}
-        requestLogsLoading={requestLogsLoading}
-        requestLogsRefreshing={requestLogsRefreshing}
-        requestLogsAvailable={requestLogsAvailable}
-        onRefreshRequestLogs={() => void refreshRequestLogs()}
-        selectedLogId={selectedLogId}
-        onSelectLogId={setSelectedLogId}
-      />
-
+      <Card padding="sm" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="text-sm font-semibold">代理记录列表</div>
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-muted-foreground">{logsSummaryText ?? ""}</div>
+            <Button
+              onClick={() => void refreshRequestLogs()}
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1 px-2 text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400"
+              disabled={
+                requestLogsAvailable === false || requestLogsLoading || requestLogsRefreshing
+              }
+            >
+              刷新
+              <RefreshCw
+                className={cn(
+                  "h-3.5 w-3.5",
+                  (requestLogsLoading || requestLogsRefreshing) && "animate-spin"
+                )}
+              />
+            </Button>
+          </div>
+        </div>
+        <RequestLogsTable
+          traces={traces}
+          activeRequests={filteredActiveRequests}
+          requestLogs={filteredLogs}
+          requestLogsLoading={requestLogsLoading}
+          requestLogsRefreshing={requestLogsRefreshing}
+          requestLogsAvailable={requestLogsAvailable}
+          emptyStateTitle={
+            activeFilterCount > 0 ? "没有符合筛选条件的代理记录" : "当前没有代理记录"
+          }
+          selectedLogId={selectedLogId}
+          onSelectLogId={setSelectedLogId}
+          showCustomTooltip={showCustomTooltip}
+        />
+      </Card>
       <RequestLogDetailDialog selectedLogId={selectedLogId} onSelectLogId={setSelectedLogId} />
     </div>
   );

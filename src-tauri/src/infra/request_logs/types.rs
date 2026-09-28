@@ -6,6 +6,7 @@ use serde::Serialize;
 pub struct RequestLogInsert {
     pub trace_id: String,
     pub cli_key: String,
+    pub client_identity: String,
     pub session_id: Option<String>,
     pub method: String,
     pub path: String,
@@ -62,6 +63,7 @@ pub struct RequestLogSummary {
     pub id: i64,
     pub trace_id: String,
     pub cli_key: String,
+    pub client_identity: String,
     pub session_id: Option<String>,
     pub method: String,
     pub path: String,
@@ -113,6 +115,7 @@ pub struct RequestLogDetail {
     pub id: i64,
     pub trace_id: String,
     pub cli_key: String,
+    pub client_identity: String,
     pub session_id: Option<String>,
     pub method: String,
     pub path: String,

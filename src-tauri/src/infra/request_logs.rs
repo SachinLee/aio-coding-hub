@@ -633,6 +633,7 @@ fn insert_batch_once(
 		INSERT INTO request_logs (
 		  trace_id,
 		  cli_key,
+		  client_identity,
 		  session_id,
 		  method,
 		  path,
@@ -662,9 +663,10 @@ fn insert_batch_once(
 		  final_provider_id,
 		  provider_chain_json,
 		  error_details_json
-		) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)
+		) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)
 		ON CONFLICT(trace_id) DO UPDATE SET
 		  method = excluded.method,
+		  client_identity = excluded.client_identity,
 		  path = excluded.path,
 		  query = excluded.query,
 		  excluded_from_stats = excluded.excluded_from_stats,
@@ -814,6 +816,7 @@ fn insert_batch_once(
             stmt.execute(params![
                 item.trace_id,
                 item.cli_key,
+                item.client_identity,
                 item.session_id,
                 item.method,
                 item.path,
@@ -959,6 +962,7 @@ mod tests {
         RequestLogInsert {
             trace_id: trace_id.to_string(),
             cli_key: "claude".to_string(),
+            client_identity: "unknown".to_string(),
             session_id: None,
             method: "POST".to_string(),
             path: "/v1/messages".to_string(),

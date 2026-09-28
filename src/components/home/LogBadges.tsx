@@ -30,6 +30,33 @@ export function FreeBadge() {
   );
 }
 
+const CLIENT_IDENTITY_LABELS: Record<string, string> = {
+  pi: "Pi",
+  omp: "OMP",
+  codex: "Codex",
+  opencode: "OpenCode",
+  "claude-code": "Claude Code",
+};
+
+const CLIENT_IDENTITY_TOOLTIP =
+  "通过请求头被动识别的客户端（User-Agent / originator 等），未知客户端不展示";
+
+export function ClientIdentityBadge({ value }: { value: string | null | undefined }) {
+  const key = value?.trim();
+  if (!key) return null;
+  const label = CLIENT_IDENTITY_LABELS[key];
+  if (!label) return null;
+
+  return (
+    <span
+      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-md border border-border/45 bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+      title={CLIENT_IDENTITY_TOOLTIP}
+    >
+      {label}
+    </span>
+  );
+}
+
 export function ReasoningEffortBadge({ value }: { value: string | null | undefined }) {
   const effort = value?.trim();
   if (!effort) return null;

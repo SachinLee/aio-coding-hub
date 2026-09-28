@@ -43,6 +43,29 @@ pub(crate) async fn cli_manager_codex_model_catalog_get(
 
 #[tauri::command]
 #[specta::specta]
+pub(crate) async fn cli_manager_codex_model_catalog_refresh(
+    app: tauri::AppHandle,
+    db_state: tauri::State<'_, crate::app_state::DbInitState>,
+) -> Result<(), String> {
+    let db = crate::app_state::ensure_db_ready(app.clone(), db_state.inner())
+        .await
+        .map_err(|error| error.to_string())?;
+    let result = blocking::run("cli_manager_codex_model_catalog_refresh", move || {
+        crate::cli_proxy::refresh_codex_model_catalog_if_enabled(&app, &db)
+    })
+    .await
+    .map_err(|error| error.to_string())?;
+    match result {
+        crate::cli_proxy::CodexCatalogRefreshResult::Updated
+        | crate::cli_proxy::CodexCatalogRefreshResult::Unchanged => Ok(()),
+        crate::cli_proxy::CodexCatalogRefreshResult::NotActive => {
+            Err("Codex 代理未启用，无法更新模型目录".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
 pub(crate) async fn cli_manager_codex_config_get(
     app: tauri::AppHandle,
 ) -> Result<codex_config::CodexConfigState, String> {

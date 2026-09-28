@@ -179,6 +179,16 @@ export async function cliManagerCodexModelCatalogGet() {
   });
 }
 
+export async function cliManagerCodexModelCatalogRefresh() {
+  return invokeGeneratedIpc<void>({
+    title: "更新 Codex 模型目录失败",
+    cmd: "cli_manager_codex_model_catalog_refresh",
+    invoke: () =>
+      commands.cliManagerCodexModelCatalogRefresh() as Promise<GeneratedCommandResult<void>>,
+    nullResultBehavior: "return_fallback",
+  });
+}
+
 export async function cliManagerCodexConfigGet() {
   return invokeGeneratedIpc<CodexConfigState>({
     title: "读取 Codex 配置失败",
