@@ -279,6 +279,7 @@ mod tests {
         active_requests: Arc<ActiveRequestRegistry>,
     ) -> StreamFinalizeCtx<tauri::test::MockRuntime> {
         StreamFinalizeCtx {
+            ws_request: None,
             app,
             db,
             log_tx,

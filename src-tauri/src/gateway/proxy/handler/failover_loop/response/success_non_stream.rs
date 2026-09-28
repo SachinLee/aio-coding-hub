@@ -8,6 +8,7 @@ use crate::gateway::proxy::{
     detect_fake_200_non_stream_body, gemini_oauth, protocol_bridge, provider_router,
     upstream_client_error_rules, Fake200Profile, GatewayErrorCode,
 };
+use crate::gateway::streams::UpstreamResponse;
 
 fn buffer_cx2cc_event_stream_as_json(
     cx2cc_active: bool,
@@ -247,7 +248,7 @@ impl NonStreamBodyReadError {
 }
 
 async fn read_non_stream_body_with_limit(
-    mut resp: reqwest::Response,
+    mut resp: UpstreamResponse,
     started: Instant,
     timeout: Option<std::time::Duration>,
     limit_bytes: usize,
@@ -348,7 +349,7 @@ pub(super) async fn handle_success_non_stream<R>(
     provider_ctx: ProviderCtx<'_>,
     attempt_ctx: AttemptCtx<'_>,
     loop_state: LoopState<'_, R>,
-    resp: reqwest::Response,
+    resp: UpstreamResponse,
     status: StatusCode,
     mut response_headers: HeaderMap,
 ) -> LoopControl
@@ -1341,6 +1342,7 @@ mod tests {
         Cx2ccSuccessPayloadKind, NonStreamBodyReadError,
     };
     use crate::domain::usage;
+    use crate::gateway::streams::UpstreamResponse;
     use axum::body::Bytes;
     use axum::http::{header, HeaderMap, HeaderValue};
     use serde_json::json;
@@ -1352,7 +1354,7 @@ mod tests {
         declared_content_length: usize,
         sent_body: Vec<u8>,
         keep_open: bool,
-    ) -> (reqwest::Response, tokio::task::JoinHandle<()>) {
+    ) -> (UpstreamResponse, tokio::task::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind test upstream");
@@ -1379,12 +1381,12 @@ mod tests {
             .send()
             .await
             .expect("response");
-        (response, task)
+        (response.into(), task)
     }
 
     async fn unknown_length_response(
         sent_body: Vec<u8>,
-    ) -> (reqwest::Response, tokio::task::JoinHandle<()>) {
+    ) -> (UpstreamResponse, tokio::task::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind test upstream");
@@ -1406,7 +1408,7 @@ mod tests {
             .send()
             .await
             .expect("response");
-        (response, task)
+        (response.into(), task)
     }
 
     #[test]
