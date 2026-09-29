@@ -3816,6 +3816,12 @@ export type ProviderContribution = {
   targetCliKeys: TargetCliKey[];
   extensionNamespace: string;
 };
+/**
+ * A single custom HTTP header injected into upstream requests for a provider.
+ * Used for gateways that require non-standard identity/auth headers beyond the
+ * CLI's built-in auth (e.g. `X-User-Id`, `X-Domain`).
+ */
+export type ProviderCustomHeader = { name: string; value: string };
 export type ProviderExtensionValues = {
   pluginId: string;
   namespace: string;
@@ -3858,6 +3864,7 @@ export type ProviderModelDiscoveryErrorCode =
   | "invalid_response"
   | "too_large";
 export type ProviderModelDiscoveryInput = {
+  customHeaders: ProviderCustomHeader[] | null;
   providerId: number | null;
   cliKey: string;
   authMode: ProviderAuthMode;
@@ -3969,6 +3976,7 @@ export type ProviderSummary = {
   stream_idle_timeout_seconds: number | null;
   supports_websockets: boolean;
   extension_values: ProviderExtensionValues[];
+  custom_headers: ProviderCustomHeader[];
   api_key_configured: boolean;
 };
 export type ProviderUpsertInput = {
@@ -3998,6 +4006,7 @@ export type ProviderUpsertInput = {
   streamIdleTimeoutSeconds: number | null;
   supportsWebsockets: boolean | null;
   extensionValues: ProviderExtensionValuesInput[] | null;
+  customHeaders: ProviderCustomHeader[] | null;
 };
 export type RequestAttemptLog = {
   id: number;
