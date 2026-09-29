@@ -133,6 +133,7 @@ async fn refresh_model_catalogs<R: tauri::Runtime>(app: tauri::AppHandle<R>, db:
                 None
             };
             let input = crate::app::provider_model_discovery::ProviderModelDiscoveryInput {
+                custom_headers: None,
                 provider_id: Some(provider.id),
                 cli_key: cli_key.to_string(),
                 auth_mode,

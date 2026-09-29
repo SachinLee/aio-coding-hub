@@ -1776,11 +1776,11 @@ async fn custom_headers_local_cx2cc_gateway_uses_final_codex_provider() {
         .send().await.unwrap();
     let status = response.status();
     let body = response.text().await.unwrap();
-    let (shutdown, task, log_task, circuit_task, oauth_shutdown, oauth_task) =
+    let (shutdown, task, log_task, circuit_task, oauth_shutdown, oauth_task, model_catalog_task) =
         crate::app::gateway_control::app_take_running_gateway(fixture.app.handle()).unwrap();
     let _ = shutdown.send(());
     let _ = oauth_shutdown.send(true);
-    for task in [task, log_task, circuit_task, oauth_task] {
+    for task in [task, log_task, circuit_task, oauth_task, model_catalog_task] {
         task.abort();
     }
     assert_eq!(status, StatusCode::OK, "{body}");

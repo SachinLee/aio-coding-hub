@@ -293,6 +293,7 @@ pub(crate) async fn model_catalog_refresh_preview(
             None
         };
         let input = crate::app::provider_model_discovery::ProviderModelDiscoveryInput {
+            custom_headers: None,
             provider_id: Some(provider.id),
             cli_key: cli_key.clone(),
             auth_mode,
