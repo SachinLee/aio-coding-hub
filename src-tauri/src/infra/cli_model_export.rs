@@ -282,9 +282,13 @@ fn opencode_config_path(app: &tauri::AppHandle) -> AppResult<PathBuf> {
         .join("opencode.json"))
 }
 
-fn opencode_model_entry(model_id: &str, context_window: i64) -> Value {
+/// Model entry for one catalog model.
+///
+/// Reasoning variants are deliberately left to OpenCode: it derives them from
+/// the SDK family itself, and the exporter must not invent `variants` payloads.
+fn opencode_model_entry(model_id: &str, context_window: i64, provider_name: &str) -> Value {
     json!({
-        "name": model_id,
+        "name": format!("{provider_name}/{model_id}"),
         "limit": {
             "context": context_window,
             "output": 128000
@@ -355,7 +359,7 @@ fn export_to_opencode(
     for model in &models {
         models_obj.insert(
             model.model_id.clone(),
-            opencode_model_entry(&model.model_id, model.context_window),
+            opencode_model_entry(&model.model_id, model.context_window, provider_name),
         );
     }
     let new_models = Value::Object(models_obj);
@@ -439,8 +443,33 @@ mod tests {
 
     #[test]
     fn opencode_model_entry_uses_catalog_context_window() {
-        let entry = opencode_model_entry("gpt-5", 750_000);
+        let entry = opencode_model_entry("gpt-5", 750_000, "aio-codex");
         assert_eq!(entry["limit"]["context"], 750_000);
+    }
+
+    #[test]
+    fn opencode_model_entry_prefixes_provider_name() {
+        let entry = opencode_model_entry("cline-free/gpt-5.6", 1_000_000, "aio-codex");
+        assert_eq!(entry["name"], "aio-codex/cline-free/gpt-5.6");
+    }
+
+    #[test]
+    fn opencode_model_entry_never_writes_variants() {
+        let entry = opencode_model_entry("gpt-5.6", 1_000_000, "aio-codex");
+        let obj = entry.as_object().expect("entry object");
+        let mut keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            vec![
+                "attachment",
+                "limit",
+                "name",
+                "reasoning",
+                "temperature",
+                "tool_call"
+            ]
+        );
     }
 
     #[test]
