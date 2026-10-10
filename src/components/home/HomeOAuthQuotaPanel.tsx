@@ -50,7 +50,11 @@ function OAuthQuotaProviderCard({
   const canResetCredit = Boolean(
     showResetCredit && resetCreditCount > 0 && row.state !== "loading" && !row.resetting
   );
-  const hasQuotaDisplay = hasHomeOAuthQuotaText(row.limits) || showResetCredit;
+  const hasQuotaDisplay =
+    hasHomeOAuthQuotaText(row.limits) ||
+    showInsufficientQuota ||
+    showResetCredit ||
+    (row.cliKey === "codex" && row.limits?.credits != null);
   const requestReset = () => {
     if (!canResetCredit || !onRequestReset) return;
     onRequestReset(row);
@@ -146,7 +150,7 @@ function OAuthQuotaProviderCard({
             />
             {showInsufficientQuota ? (
               <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                配额不足
+                配额保护中
               </span>
             ) : null}
           </div>
@@ -180,7 +184,13 @@ export function HomeOAuthQuotaPanelContent({
   const showNoQuotaNotice =
     hasRefreshed &&
     rows.length > 0 &&
-    rows.every((row) => row.state === "success" && !hasHomeOAuthQuotaText(row.limits));
+    rows.every(
+      (row) =>
+        row.state === "success" &&
+        !hasHomeOAuthQuotaText(row.limits) &&
+        !hasInsufficientHomeOAuthQuota(row.limits) &&
+        (row.cliKey !== "codex" || row.limits?.credits == null)
+    );
 
   if (!hasProviders) {
     return <EmptyState title="当前没有 OAuth 供应商" />;

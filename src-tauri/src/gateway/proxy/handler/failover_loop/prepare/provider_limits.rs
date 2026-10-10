@@ -356,7 +356,68 @@ fn resolve_fixed_5h_start(
     Ok(now_unix)
 }
 
-pub(super) fn gate_provider<R: tauri::Runtime>(input: ProviderLimitsInput<'_, R>) -> bool {
+async fn oauth_quota_gate<R: tauri::Runtime>(
+    ctx: CommonCtx<'_, R>,
+    provider: &providers::ProviderForGateway,
+) -> Result<crate::domain::provider_oauth_limits::OAuthLimitGate, String> {
+    use crate::domain::provider_oauth_limits::{self, gate_snapshot, OAuthLimitGate};
+
+    if provider.auth_mode != "oauth" {
+        return Ok(OAuthLimitGate::Allow);
+    }
+    crate::gateway::oauth::limits::refresh_if_stale(&ctx.state.app, &ctx.state.db, provider.id)
+        .await?;
+    let conn = ctx.state.db.open_connection().map_err(String::from)?;
+    let now = crate::shared::time::now_unix_seconds();
+    let gate = gate_snapshot(&conn, provider.id, now).map_err(String::from)?;
+    if let OAuthLimitGate::Limited { reset_at } = gate {
+        let policy =
+            provider_oauth_limits::read_policy(&conn, provider.id).map_err(String::from)?;
+        if policy.oauth_min_remaining_percent.is_some() || policy.oauth_use_credits {
+            // A cached unavailable response must expire before the next quota refresh.
+            let recheck_at = provider_oauth_limits::read_snapshot(&conn, provider.id)
+                .map_err(String::from)?
+                .map_or(now, |snapshot| {
+                    snapshot.checked_at + provider_oauth_limits::SNAPSHOT_FRESHNESS_SECS
+                })
+                .max(now + 1);
+            return Ok(OAuthLimitGate::Limited {
+                reset_at: Some(reset_at.map_or(recheck_at, |reset_at| reset_at.min(recheck_at))),
+            });
+        }
+    }
+    Ok(gate)
+}
+
+pub(super) async fn gate_oauth_provider<R: tauri::Runtime>(
+    ctx: CommonCtx<'_, R>,
+    provider: &providers::ProviderForGateway,
+    earliest_available_unix: &mut Option<i64>,
+    skipped_limits: &mut usize,
+) -> bool {
+    use crate::domain::provider_oauth_limits::{OAuthLimitGate, SNAPSHOT_FRESHNESS_SECS};
+
+    let reset_at = match oauth_quota_gate(ctx, provider).await {
+        Ok(OAuthLimitGate::Allow) => return true,
+        Ok(OAuthLimitGate::Limited { reset_at }) => reset_at,
+        Err(err) => {
+            tracing::warn!(
+                provider_id = provider.id,
+                provider_name = %provider.name,
+                "failed to gate OAuth provider quota snapshot: {err}"
+            );
+            // A failed lookup must not inherit another provider's longer cooldown.
+            Some(crate::shared::time::now_unix_seconds() + SNAPSHOT_FRESHNESS_SECS)
+        }
+    };
+    *skipped_limits = skipped_limits.saturating_add(1);
+    if let Some(reset_at) = reset_at {
+        update_earliest(earliest_available_unix, reset_at);
+    }
+    false
+}
+
+pub(super) async fn gate_provider<R: tauri::Runtime>(input: ProviderLimitsInput<'_, R>) -> bool {
     let ProviderLimitsInput {
         ctx,
         provider,
@@ -370,37 +431,22 @@ pub(super) fn gate_provider<R: tauri::Runtime>(input: ProviderLimitsInput<'_, R>
         return true;
     }
 
-    let conn = match ctx.state.db.open_connection() {
-        Ok(conn) => conn,
-        Err(_) => return true,
-    };
-
-    let now_unix = ctx.created_at;
-    let end_unix = now_unix.saturating_add(1);
-
-    if has_oauth_quota_gate {
-        match crate::domain::provider_oauth_limits::gate_snapshot(&conn, provider.id, now_unix) {
-            Ok(crate::domain::provider_oauth_limits::OAuthLimitGate::Allow) => {}
-            Ok(crate::domain::provider_oauth_limits::OAuthLimitGate::Limited { reset_at }) => {
-                *skipped_limits = skipped_limits.saturating_add(1);
-                if let Some(reset_at) = reset_at {
-                    update_earliest(earliest_available_unix, reset_at);
-                }
-                return false;
-            }
-            Err(err) => {
-                tracing::warn!(
-                    provider_id = provider.id,
-                    provider_name = %provider.name,
-                    "failed to gate OAuth provider quota snapshot: {err}"
-                );
-            }
-        }
+    if has_oauth_quota_gate
+        && !gate_oauth_provider(ctx, provider, earliest_available_unix, skipped_limits).await
+    {
+        return false;
     }
 
     if !has_spend_limit {
         return true;
     }
+
+    let conn = match ctx.state.db.open_connection() {
+        Ok(conn) => conn,
+        Err(_) => return true,
+    };
+    let now_unix = ctx.created_at;
+    let end_unix = now_unix.saturating_add(1);
 
     // Use fixed window for 5h limit
     let start_5h = if provider.limit_5h_usd.is_some() {
@@ -728,8 +774,8 @@ CREATE TABLE request_logs (
         );
     }
 
-    #[test]
-    fn gate_provider_rejects_cost_total_above_i64_max() {
+    #[tokio::test]
+    async fn gate_provider_rejects_cost_total_above_i64_max() {
         const COST_TERM_FEMTO: i64 = 3_i64 << 61;
         const NOW_UNIX: i64 = 1_000;
         const WINDOW_START_UNIX: i64 = 900;
@@ -824,12 +870,15 @@ INSERT INTO request_logs (
         let mut earliest_available_unix = None;
         let mut skipped_limits = 0;
 
-        assert!(!gate_provider(ProviderLimitsInput {
-            ctx,
-            provider: &provider,
-            earliest_available_unix: &mut earliest_available_unix,
-            skipped_limits: &mut skipped_limits,
-        }));
+        assert!(
+            !gate_provider(ProviderLimitsInput {
+                ctx,
+                provider: &provider,
+                earliest_available_unix: &mut earliest_available_unix,
+                skipped_limits: &mut skipped_limits,
+            })
+            .await
+        );
         assert_eq!(skipped_limits, 1);
         assert_eq!(
             earliest_available_unix,

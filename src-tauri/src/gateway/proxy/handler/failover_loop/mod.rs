@@ -9,6 +9,8 @@
 //! - `attempt/`  — single-attempt execution, auth injection, retry decisions
 //! - `response/` — response routing, stream/non-stream handling, error/finalize
 
+use crate::shared::mutex_ext::MutexExt;
+
 // --- shared (stay in root) ---
 mod context;
 mod event_helpers;
@@ -339,6 +341,10 @@ where
             state: &input.state,
             abort_guard: &mut abort_guard,
             observe: input.observe_request,
+            recovered_request: input
+                .ws_request
+                .as_ref()
+                .is_some_and(|request| request.generation.lock_or_recover().recovered),
             attempts: std::mem::take(&mut run_state.attempts),
             cli_key: owned.cli_key,
             client_identity: owned.client_identity,
@@ -357,8 +363,6 @@ where
             skipped_open: counters.skipped_open,
             skipped_cooldown: counters.skipped_cooldown,
             skipped_limits: counters.skipped_limits,
-            fingerprint_key: input.fingerprint_key,
-            fingerprint_debug: input.fingerprint_debug.clone(),
             unavailable_fingerprint_key: input.unavailable_fingerprint_key,
             unavailable_fingerprint_debug: input.unavailable_fingerprint_debug.clone(),
         })

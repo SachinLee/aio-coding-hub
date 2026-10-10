@@ -29,6 +29,7 @@ struct Fixture {
     runtime: Arc<Runtime>,
     active: Arc<crate::gateway::active_requests::ActiveRequestRegistry>,
     circuit: Arc<circuit_breaker::CircuitBreaker>,
+    recent_errors: Arc<Mutex<RecentErrorCache>>,
     previous_env: Vec<(&'static str, Option<OsString>)>,
     _home: tempfile::TempDir,
     _lock: MutexGuard<'static, ()>,
@@ -82,6 +83,7 @@ impl Fixture {
                 Default::default(),
                 None,
             )),
+            recent_errors: Default::default(),
             previous_env,
             _home: home,
             _lock: lock,
@@ -100,9 +102,26 @@ impl Fixture {
         provider_id: Option<i64>,
         tenant: Option<&str>,
     ) -> i64 {
-        let priority = providers::default_route_list(&self.db, "codex")
-            .unwrap()
-            .len() as i64;
+        self.provider_for_cli_with_headers(
+            "codex",
+            name,
+            base_url,
+            supports_ws,
+            provider_id,
+            tenant,
+        )
+    }
+
+    fn provider_for_cli_with_headers(
+        &self,
+        cli: &str,
+        name: &str,
+        base_url: &str,
+        supports_ws: bool,
+        provider_id: Option<i64>,
+        tenant: Option<&str>,
+    ) -> i64 {
+        let priority = providers::default_route_list(&self.db, cli).unwrap().len() as i64;
         let row = providers::upsert(
             &self.db,
             providers::ProviderUpsertParams {
@@ -116,7 +135,7 @@ impl Fixture {
                         .collect(),
                 ),
                 provider_id,
-                cli_key: "codex".into(),
+                cli_key: cli.into(),
                 name: name.into(),
                 base_urls: vec![base_url.into()],
                 base_url_mode: providers::ProviderBaseUrlMode::Order,
@@ -134,6 +153,8 @@ impl Fixture {
                 limit_weekly_usd: None,
                 limit_monthly_usd: None,
                 limit_total_usd: None,
+                oauth_min_remaining_percent: None,
+                oauth_use_credits: false,
                 tags: None,
                 note: None,
                 source_provider_id: None,
@@ -144,7 +165,7 @@ impl Fixture {
             },
         )
         .unwrap();
-        let mut ids: Vec<_> = providers::default_route_list(&self.db, "codex")
+        let mut ids: Vec<_> = providers::default_route_list(&self.db, cli)
             .unwrap()
             .into_iter()
             .map(|row| row.provider_id)
@@ -152,7 +173,7 @@ impl Fixture {
         if !ids.contains(&row.id) {
             ids.push(row.id);
         }
-        providers::default_route_set_order(&self.db, "codex", ids).unwrap();
+        providers::default_route_set_order(&self.db, cli, ids).unwrap();
         row.id
     }
 
@@ -174,6 +195,17 @@ impl Fixture {
         tokio::sync::mpsc::Receiver<request_logs::RequestLogInsert>,
     ) {
         let (log_tx, log_rx) = tokio::sync::mpsc::channel(32);
+        (
+            Server::start(self.router(log_tx, plugin_pipeline)).await,
+            log_rx,
+        )
+    }
+
+    fn router(
+        &self,
+        log_tx: tokio::sync::mpsc::Sender<request_logs::RequestLogInsert>,
+        plugin_pipeline: Arc<GatewayPluginPipeline>,
+    ) -> Router {
         let state = GatewayAppState {
             app: self.app.handle().clone(),
             db: self.db.clone(),
@@ -181,13 +213,13 @@ impl Fixture {
             circuit: self.circuit.clone(),
             session: Arc::new(session_manager::SessionManager::new()),
             codex_session_cache: Arc::new(Mutex::new(CodexSessionIdCache::default())),
-            recent_errors: Arc::new(Mutex::new(RecentErrorCache::default())),
+            recent_errors: self.recent_errors.clone(),
             latency_cache: Arc::new(Mutex::new(ProviderBaseUrlPingCache::default())),
             plugin_pipeline,
             active_requests: self.active.clone(),
             responses_ws: self.runtime.clone(),
         };
-        (Server::start(build_router(state)).await, log_rx)
+        build_router(state)
     }
 }
 
@@ -508,6 +540,96 @@ async fn terminal_log(
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn ws_local_nonce_rejections_log_the_same_trace_without_calling_upstream() {
+    for case in ["forged", "completed-replay"] {
+        let fixture = Fixture::new(true).await;
+        let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+        let provider = fixture.provider("A", &upstream.origin(), true);
+        let (gateway, mut logs) = fixture.start().await;
+        let session = "local-rejection";
+        let Message::Text(create) = create_message(Some(session)) else {
+            unreachable!()
+        };
+        let mut body: Value = serde_json::from_str(&create).unwrap();
+        body["input"][0]["type"] = json!("message");
+        body["input"][0]["content"][0]["text"] = json!("private-prompt-must-not-be-logged");
+        let owner = protocol::Owner::parse(
+            body["client_metadata"]["x-codex-turn-metadata"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        let (nonce, reason) = if case == "completed-replay" {
+            let mut first = connect(&gateway, session).await.unwrap();
+            first.send(Message::Text(body.to_string())).await.unwrap();
+            let nonce = recv_until(&mut first, "response.metadata").await["headers"]
+                [protocol::TURN_STATE_HEADER]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            recv_until(&mut first, "response.completed").await;
+            assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+            first.close(None).await.unwrap();
+            drop(first);
+            stub.calls.lock().unwrap().clear();
+            (
+                nonce,
+                "Responses generation does not extend the completed history",
+            )
+        } else {
+            let nonce = fixture.runtime.issue_nonce(&owner).unwrap();
+            body["client_metadata"][protocol::TURN_STATE_HEADER] = json!("aio-ws-forged");
+            (nonce, "context recovery ownership mismatch")
+        };
+        let mut socket = connect(&gateway, session).await.unwrap();
+        socket.send(Message::Text(body.to_string())).await.unwrap();
+        let error = recv_until(&mut socket, "error").await;
+        assert_eq!(error["status"], 400);
+        assert_eq!(error["error"]["code"], "invalid_request");
+        assert_eq!(error["error"]["message"], reason);
+        let trace = error["trace_id"].as_str().expect("local rejection trace");
+        let log = terminal_log(&mut logs).await;
+        assert_eq!(log.trace_id, trace);
+        assert_eq!(log.status, Some(400));
+        assert_eq!(log.error_code.as_deref(), Some("GW_REQUEST_REJECTED"));
+        assert_eq!(log.method, "POST");
+        assert_eq!(log.path, "/v1/responses");
+        assert_eq!(
+            serde_json::from_str::<Value>(&log.attempts_json).unwrap(),
+            json!([])
+        );
+        let details = log.error_details_json.as_deref().unwrap();
+        let parsed: Value = serde_json::from_str(details).unwrap();
+        assert_eq!(parsed["error_category"], "local");
+        assert_eq!(parsed["reason_code"], "invalid_request");
+        assert_eq!(parsed["reason"], reason);
+        let settings = log.special_settings_json.as_deref().unwrap();
+        let parsed: Vec<Value> = serde_json::from_str(settings).unwrap();
+        assert!(parsed
+            .iter()
+            .any(|setting| setting["type"] == "codex_responses_transport"
+                && setting["client_transport"] == "responses_ws"
+                && setting["failure_class"] == "local"
+                && setting["upstream_sent"] == false));
+        for encoded in [details, settings] {
+            assert!(!encoded.contains(&nonce));
+            assert!(!encoded.contains("aio-ws-forged"));
+            assert!(!encoded.contains("private-prompt-must-not-be-logged"));
+        }
+        assert!(stub.transports().is_empty());
+        assert!(fixture.active.snapshot().is_empty());
+        assert_eq!(
+            fixture
+                .circuit
+                .snapshot(provider, crate::shared::time::now_unix_seconds())
+                .failure_count,
+            0
+        );
+        assert!(logs.try_recv().is_err());
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn ordinary_http_stream_remains_http_when_provider_supports_ws() {
     let fixture = Fixture::new(true).await;
     let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
@@ -600,6 +722,54 @@ async fn ws_without_recovery_metadata_keeps_same_connection_context() {
         ["ws"],
         "both generations use one upstream connection"
     );
+    socket.close(None).await.unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn ws_incremental_continuation_logs_session_reuse() {
+    let fixture = Fixture::new(true).await;
+    let (_stub, upstream) = Stub::start("A", Behavior::KeepAlive).await;
+    let provider_id = fixture.provider("A", &upstream.origin(), true);
+    let (gateway, mut logs) = fixture.start().await;
+    let mut socket = connect_with_user_agent(&gateway, "ws-session-reuse", None)
+        .await
+        .unwrap();
+    let cache_key = "019a0000-0000-7000-8000-00000000c0de";
+    socket
+        .send(Message::Text(
+            json!({
+                "type":"response.create", "model":"gpt-test", "prompt_cache_key":cache_key,
+                "input":[{"role":"user","content":"hello"}]
+            })
+            .to_string(),
+        ))
+        .await
+        .unwrap();
+    recv_until(&mut socket, "response.completed").await;
+    let first = terminal_log(&mut logs).await;
+    let first_attempts: Vec<Value> = serde_json::from_str(&first.attempts_json).unwrap();
+    assert_eq!(first_attempts[0]["session_reuse"], Value::Null);
+
+    // Codex 续接只带增量 input（单条），会话绑定仍须生效。
+    socket
+        .send(Message::Text(
+            json!({
+                "type":"response.create", "model":"gpt-test", "prompt_cache_key":cache_key,
+                "previous_response_id":"resp-A",
+                "input":[{"type":"function_call_output","call_id":"call-1","output":"ok"}]
+            })
+            .to_string(),
+        ))
+        .await
+        .unwrap();
+    recv_until(&mut socket, "response.completed").await;
+    let second = terminal_log(&mut logs).await;
+    assert_eq!(second.session_id, first.session_id);
+    assert!(second.session_id.is_some());
+    let attempts: Vec<Value> = serde_json::from_str(&second.attempts_json).unwrap();
+    assert_eq!(attempts[0]["provider_id"], provider_id);
+    assert_eq!(attempts[0]["session_reuse"], true);
+    assert_eq!(attempts[0]["selection_method"], "session_reuse");
     socket.close(None).await.unwrap();
 }
 
@@ -1081,6 +1251,13 @@ fn isolated_cli_command(path: &std::path::Path, root: &std::path::Path) -> tokio
 }
 
 async fn run_cli(command: &mut tokio::process::Command) -> std::process::Output {
+    run_cli_with_timeout(command, Duration::from_secs(40)).await
+}
+
+async fn run_cli_with_timeout(
+    command: &mut tokio::process::Command,
+    timeout: Duration,
+) -> std::process::Output {
     use tokio::io::AsyncReadExt;
     command
         .stdin(std::process::Stdio::null())
@@ -1108,7 +1285,7 @@ async fn run_cli(command: &mut tokio::process::Command) -> std::process::Output 
             .unwrap();
         bytes
     });
-    let result = tokio::time::timeout(Duration::from_secs(40), child.wait()).await;
+    let result = tokio::time::timeout(timeout, child.wait()).await;
     if result.is_err() {
         #[cfg(unix)]
         crate::shared::process::terminate_unix_process_group(pid);
@@ -1118,7 +1295,7 @@ async fn run_cli(command: &mut tokio::process::Command) -> std::process::Output 
     }
     let output = std::process::Output {
         status: result
-            .expect("Codex CLI completed within 40 seconds")
+            .expect("selected CLI completed within the test deadline")
             .expect("wait Codex CLI"),
         stdout: stdout_task.await.unwrap(),
         stderr: stderr_task.await.unwrap(),
@@ -1130,7 +1307,7 @@ async fn run_cli(command: &mut tokio::process::Command) -> std::process::Output 
     output
 }
 
-/// Explicit opt-in: AIO_CODEX_WS_TEST_CLI=/absolute/path/to/codex pnpm tauri:test -- real_codex_cli_rebuilds_context --ignored --nocapture
+/// Explicit opt-in: AIO_CODEX_WS_TEST_CLI=/absolute/path/to/codex pnpm tauri:test -- real_codex_cli_rebuilds_context --lib -- --ignored --nocapture
 #[tokio::test(flavor = "current_thread")]
 #[ignore = "requires an explicitly selected real Codex CLI executable"]
 async fn real_codex_cli_rebuilds_context_then_fails_over_without_repeating_tool() {
@@ -1283,6 +1460,59 @@ async fn real_codex_cli_rebuilds_context_then_fails_over_without_repeating_tool(
 struct CliTwoTurnStub {
     connections: Arc<std::sync::atomic::AtomicUsize>,
     calls: Arc<Mutex<Vec<Value>>>,
+    auto_compact: bool,
+}
+
+impl CliTwoTurnStub {
+    fn response(&self, body: Value) -> Vec<Value> {
+        let generation = {
+            let mut calls = self.calls.lock().unwrap();
+            calls.push(body.clone());
+            calls
+                .iter()
+                .filter(|body| body["generate"] != false)
+                .count()
+        };
+        if body["generate"] == false {
+            vec![
+                json!({"type":"response.completed","response":{"id":"warm","status":"completed","output":[]}}),
+            ]
+        } else if self.auto_compact
+            && body
+                .pointer("/client_metadata/x-codex-turn-metadata")
+                .and_then(Value::as_str)
+                .and_then(|metadata| serde_json::from_str::<Value>(metadata).ok())
+                .is_some_and(|metadata| metadata["request_kind"] == "compaction")
+        {
+            if body["input"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["type"] == "compaction_trigger")
+            {
+                let item = json!({"type":"compaction","id":"cmp_probe","encrypted_content":"synthetic-checkpoint"});
+                vec![
+                    json!({"type":"response.output_item.done","output_index":0,"item":item}),
+                    json!({"type":"response.completed","response":{"id":"resp-compaction","status":"completed","output":[item],"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}}),
+                ]
+            } else {
+                events("summary")
+            }
+        } else if generation == if self.auto_compact { 1 } else { 2 } {
+            let item = cli_tool_item(&body);
+            let mut output = vec![
+                json!({"type":"response.output_item.done","item":item}),
+                json!({"type":"response.completed","response":{"id":"resp-tool","status":"completed","output":[item]}}),
+            ];
+            if self.auto_compact {
+                output[1]["response"]["usage"] =
+                    json!({"input_tokens":200000,"output_tokens":10,"total_tokens":200010});
+            }
+            output
+        } else {
+            events(if generation == 1 { "first" } else { "final" })
+        }
+    }
 }
 
 async fn cli_two_turn_ws(
@@ -1291,30 +1521,36 @@ async fn cli_two_turn_ws(
 ) -> Response {
     stub.connections
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    upgrade.on_upgrade(move |mut socket| async move {
-        while let Some(Ok(axum::extract::ws::Message::Text(text))) = socket.recv().await {
-            let body: Value = serde_json::from_str(&text).unwrap();
-            let generation = {
-                let mut calls = stub.calls.lock().unwrap();
-                calls.push(body.clone());
-                calls.iter().filter(|body| body["generate"] != false).count()
-            };
-            let output = if body["generate"] == false {
-                vec![json!({"type":"response.completed","response":{"id":"warm","status":"completed","output":[]}})]
-            } else if generation == 2 {
-                let item = cli_tool_item(&body);
-                vec![
-                    json!({"type":"response.output_item.done","item":item}),
-                    json!({"type":"response.completed","response":{"id":"resp-tool","status":"completed","output":[item]}}),
-                ]
-            } else {
-                events(if generation == 1 { "first" } else { "final" })
-            };
-            for event in output {
-                if socket.send(axum::extract::ws::Message::Text(event.to_string())).await.is_err() { return; }
+    upgrade
+        .on_upgrade(move |mut socket| async move {
+            while let Some(Ok(axum::extract::ws::Message::Text(text))) = socket.recv().await {
+                let body: Value = serde_json::from_str(&text).unwrap();
+                for event in stub.response(body) {
+                    if socket
+                        .send(axum::extract::ws::Message::Text(event.to_string()))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
             }
-        }
-    }).into_response()
+        })
+        .into_response()
+}
+
+async fn cli_two_turn_http(
+    State(stub): State<CliTwoTurnStub>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    assert!(!headers.contains_key(protocol::TURN_STATE_HEADER));
+    let body: Vec<u8> = stub
+        .response(body)
+        .iter()
+        .flat_map(|event| protocol::sse_bytes(event).to_vec())
+        .collect();
+    ([(header::CONTENT_TYPE, "text/event-stream")], body).into_response()
 }
 
 async fn cli_message_until(
@@ -1472,6 +1708,361 @@ async fn recv_until(
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn completed_turn_compaction_starts_fresh_generation_on_ws_and_http() {
+    for (http, remote) in [(false, false), (true, false), (false, true), (true, true)] {
+        let fixture = Fixture::new(true).await;
+        let stub = CliTwoTurnStub::default();
+        let upstream = Server::start(
+            Router::new()
+                .route(
+                    "/v1/responses",
+                    get(cli_two_turn_ws).post(cli_two_turn_http),
+                )
+                .with_state(stub.clone()),
+        )
+        .await;
+        fixture.provider("A", &upstream.origin(), true);
+        let (gateway, mut logs) = fixture.start().await;
+        let session = "completed-compaction";
+        let mut socket = connect(&gateway, session).await.unwrap();
+        let Message::Text(create) = create_message(Some(session)) else {
+            unreachable!()
+        };
+        let mut body: Value = serde_json::from_str(&create).unwrap();
+        body["input"] = json!([
+            {"type":"message","role":"user","content":[{"type":"input_text","text":"first request"}]},
+            {"type":"message","role":"assistant","content":[{"type":"output_text","text":"first answer"}]},
+            {"type":"message","role":"user","content":[{"type":"input_text","text":"more context"}]}
+        ]);
+        body["tools"] =
+            json!([{"type":"function","name":"shell_command","parameters":{"type":"object"}}]);
+        socket.send(Message::Text(body.to_string())).await.unwrap();
+        let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+            [protocol::TURN_STATE_HEADER]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        recv_until(&mut socket, "response.completed").await;
+        assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+        if http {
+            socket.close(None).await.unwrap();
+            body.as_object_mut().unwrap().remove("type");
+            body["stream"] = json!(true);
+        }
+        body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+        let tool_output =
+            json!({"type":"function_call_output","call_id":"router_tool","output":"done"});
+        for generation in 0..3 {
+            if generation == 1 {
+                body["input"] = if http {
+                    let mut history = body["input"].as_array().unwrap().clone();
+                    history.extend([cli_tool_item(&body), tool_output.clone()]);
+                    json!(history)
+                } else {
+                    body["previous_response_id"] = json!("resp-tool");
+                    json!([tool_output])
+                };
+            } else {
+                body.as_object_mut().unwrap().remove("previous_response_id");
+                body["input"] = json!([{"type":"message","role":"user","content":[{"type":"input_text","text":"compacted summary"}]}]);
+                if remote {
+                    body["input"].as_array_mut().unwrap().push(json!({
+                        "type":"compaction", "id":format!("cmp_{generation}"),
+                        "encrypted_content":format!("synthetic-checkpoint-{generation}")
+                    }));
+                }
+                let mut metadata: Value = serde_json::from_str(
+                    body["client_metadata"]["x-codex-turn-metadata"]
+                        .as_str()
+                        .unwrap(),
+                )
+                .unwrap();
+                metadata["context_window_id"] = json!(format!("compacted-{generation}"));
+                body["client_metadata"]["x-codex-turn-metadata"] = json!(metadata.to_string());
+            }
+            if http {
+                let response = reqwest::Client::new()
+                    .post(format!("{}/v1/responses", gateway.origin()))
+                    .header(protocol::TURN_STATE_HEADER, &nonce)
+                    .header("session-id", session)
+                    .json(&body)
+                    .send()
+                    .await
+                    .unwrap();
+                let status = response.status();
+                let response_body = response.text().await.unwrap();
+                assert_eq!(
+                    status,
+                    StatusCode::OK,
+                    "generation {generation}: {response_body}"
+                );
+                assert!(response_body.contains("response.completed"));
+            } else {
+                socket.send(Message::Text(body.to_string())).await.unwrap();
+                let response = recv_until(&mut socket, "response.completed").await;
+                assert_eq!(
+                    response["response"]["id"],
+                    if generation == 0 {
+                        "resp-tool"
+                    } else {
+                        "resp-final"
+                    }
+                );
+            }
+            let log = terminal_log(&mut logs).await;
+            assert_eq!(log.status, Some(200));
+            let attempts: Vec<Value> = serde_json::from_str(&log.attempts_json).unwrap();
+            assert_eq!(
+                attempts.len(),
+                1,
+                "each generation needs a fresh attempt budget"
+            );
+            let settings: Vec<Value> =
+                serde_json::from_str(log.special_settings_json.as_deref().unwrap()).unwrap();
+            assert!(settings
+                .iter()
+                .filter(|setting| setting["type"] == "codex_responses_transport")
+                .all(|setting| setting["recovery_from_trace_id"].is_null()));
+        }
+        let calls = stub.calls.lock().unwrap();
+        assert_eq!(calls.len(), 4);
+        let compacted_items = if remote { 2 } else { 1 };
+        assert_eq!(calls[1]["input"].as_array().unwrap().len(), compacted_items);
+        assert_eq!(calls[3]["input"].as_array().unwrap().len(), compacted_items);
+        if remote && http {
+            assert_eq!(calls[2]["input"][1], calls[1]["input"][1]);
+            assert_eq!(calls[2]["input"].as_array().unwrap().len(), 4);
+        }
+        assert!(calls.iter().all(|body| body
+            .pointer("/client_metadata/x-codex-turn-state")
+            .is_none()));
+        assert_eq!(
+            stub.connections.load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
+        if !http {
+            socket.close(None).await.unwrap();
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "requires an explicitly selected real Codex CLI executable"]
+async fn real_codex_cli_auto_compaction_preserves_the_turn_nonce_without_repeating_tool() {
+    let cli_path = std::path::PathBuf::from(
+        std::env::var_os("AIO_CODEX_WS_TEST_CLI").expect("set absolute AIO_CODEX_WS_TEST_CLI"),
+    );
+    assert!(cli_path.is_absolute() && cli_path.is_file());
+    for remote in [false, true] {
+        let fixture = Fixture::new(true).await;
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("work")).unwrap();
+        std::fs::create_dir(root.path().join("codex")).unwrap();
+        let stub = CliTwoTurnStub {
+            auto_compact: true,
+            ..Default::default()
+        };
+        let upstream = Server::start(
+            Router::new()
+                .route(
+                    "/v1/responses",
+                    get(cli_two_turn_ws).post(cli_two_turn_http),
+                )
+                .with_state(stub.clone()),
+        )
+        .await;
+        fixture.provider("A", &upstream.origin(), true);
+        let (gateway, mut logs) = fixture.start().await;
+        let mut config = cli_test_config(&gateway.origin());
+        if remote {
+            config = config.replace("name = \"Local AIO router probe\"", "name = \"OpenAI\"");
+        }
+        std::fs::write(
+        root.path().join("codex/config.toml"),
+        format!("model_auto_compact_token_limit = 20000\nmodel_auto_compact_token_limit_scope = \"total\"\nmodel_post_turn_compact_threshold_percent = 0\n{config}"),
+    ).unwrap();
+        let output = run_cli(isolated_cli_command(&cli_path, root.path()).args([
+        "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-rules", "--json", "--color", "never", "--cd",
+    ]).arg(root.path().join("work")).arg("Run the local protocol probe, execute the requested shell tool once, then finish after compacting context.")).await;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success(),
+            "CLI failed: {}\n{stdout}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            stdout
+                .lines()
+                .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+                .any(|event| event["type"] == "turn.completed"),
+            "CLI turn did not complete: {stdout}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("work/probe-count.txt"))
+                .unwrap()
+                .lines()
+                .count(),
+            1
+        );
+        let calls = stub.calls.lock().unwrap();
+        let formal_calls: Vec<&Value> = calls
+            .iter()
+            .filter(|body| body["generate"] != false)
+            .collect();
+        let metadata: Vec<Value> = formal_calls
+            .iter()
+            .map(|body| {
+                serde_json::from_str(
+                    body["client_metadata"]["x-codex-turn-metadata"]
+                        .as_str()
+                        .unwrap(),
+                )
+                .unwrap()
+            })
+            .collect();
+        assert_eq!(
+            metadata.len(),
+            3,
+            "one tool request, one compaction, one continuation: {metadata:?}"
+        );
+        assert_eq!(metadata[1]["request_kind"], "compaction");
+        for field in ["session_id", "thread_id", "turn_id"] {
+            assert_eq!(metadata[0][field], metadata[1][field]);
+            assert_eq!(metadata[0][field], metadata[2][field]);
+        }
+        for field in ["window_id", "context_window_id"] {
+            assert_eq!(metadata[0][field], metadata[1][field]);
+            assert_ne!(metadata[0][field], metadata[2][field]);
+        }
+        let contains_compaction = |body: &Value, kind: &str| {
+            body["input"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["type"] == kind)
+        };
+        assert_eq!(
+            contains_compaction(formal_calls[1], "compaction_trigger"),
+            remote
+        );
+        assert_eq!(contains_compaction(formal_calls[2], "compaction"), remote);
+        if remote {
+            assert!(formal_calls[2]["input"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["type"] == "compaction"
+                    && item["encrypted_content"] == "synthetic-checkpoint"));
+        }
+        assert!(calls.iter().all(|body| body
+            .pointer("/client_metadata/x-codex-turn-state")
+            .is_none()));
+        drop(calls);
+        for generation in 0..3 {
+            let log = terminal_log(&mut logs).await;
+            assert_eq!(log.status, Some(200));
+            let settings: Vec<Value> =
+                serde_json::from_str(log.special_settings_json.as_deref().unwrap()).unwrap();
+            assert!(
+                settings
+                    .iter()
+                    .any(|setting| setting["type"] == "codex_responses_transport"
+                        && setting["scope"] == "request"
+                        && setting["client_transport"] == "responses_ws"),
+                "formal generation {generation} must enter over WS: {settings:?}"
+            );
+            let selected: Vec<_> = settings
+                .iter()
+                .filter(|setting| {
+                    setting["type"] == "codex_responses_transport"
+                        && setting["scope"] == "attempt"
+                        && setting["transport_action"] == "selected"
+                })
+                .collect();
+            assert_eq!(
+                selected.len(),
+                1,
+                "formal generation {generation}: {settings:?}"
+            );
+            assert_eq!(selected[0]["upstream_transport"], "responses_ws");
+            assert!(selected[0]["failure_class"].is_null());
+        }
+        assert!(logs.try_recv().is_err());
+        println!("real CLI → AIO WS → {} automatic compaction → completed; formal WS requests=3, tool executions=1",
+        if remote { "remote checkpoint" } else { "local summary" });
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn lost_context_with_unverifiable_history_still_asks_codex_for_a_full_resend() {
+    let fixture = Fixture::new(true).await;
+    let recovery = CliRecoveryStub::default();
+    let first = Server::start(
+        Router::new()
+            .route(
+                "/v1/responses",
+                get(cli_recovery_ws).post(cli_recovery_http),
+            )
+            .with_state(recovery.clone()),
+    )
+    .await;
+    let (next, next_server) = Stub::start("B", Behavior::Complete).await;
+    fixture.provider("A", &first.origin(), true);
+    fixture.provider("B", &next_server.origin(), false);
+    let (gateway, mut logs) = fixture.start().await;
+    let session = "unverifiable-context-loss";
+    let Message::Text(create) = create_message(Some(session)) else {
+        unreachable!()
+    };
+    let mut body: Value = serde_json::from_str(&create).unwrap();
+    body["input"][0]["type"] = json!("message");
+    // An item type the gateway cannot verify, e.g. one added by a newer Codex.
+    body["input"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"type":"future_item","payload":"opaque"}));
+    body["tools"] =
+        json!([{"type":"function","name":"shell_command","parameters":{"type":"object"}}]);
+    let first_input = body["input"].as_array().unwrap().clone();
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+        [protocol::TURN_STATE_HEADER]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    recv_until(&mut socket, "response.completed").await;
+    assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+
+    let tool_output = json!({"type":"function_call_output","call_id":"router_tool","output":"synthetic tool result"});
+    body["input"] = json!([tool_output]);
+    body["previous_response_id"] = json!("resp-tool");
+    body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let error = recv_until(&mut socket, "error").await;
+    assert_eq!(error["error"]["code"], "previous_response_not_found");
+    terminal_log(&mut logs).await;
+    drop(socket);
+
+    // Without a recovery grant the full resend still runs, as a fresh generation.
+    let mut input = first_input;
+    input.push(recovery.tool_item.lock().unwrap().clone().unwrap());
+    input.push(tool_output);
+    body["input"] = json!(input);
+    body.as_object_mut().unwrap().remove("previous_response_id");
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    recv_until(&mut socket, "response.completed").await;
+    let log = terminal_log(&mut logs).await;
+    assert_eq!(log.status, Some(200));
+    assert!(!log
+        .special_settings_json
+        .unwrap_or_default()
+        .contains("\"recovery_from_trace_id\":\""));
+    assert_eq!(next.transports(), ["http"]);
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn full_input_recovery_after_attempt_deadline_uses_remaining_provider_budget() {
     let fixture = Fixture::new(true).await;
     let recovery = CliRecoveryStub::default();
@@ -1598,6 +2189,97 @@ async fn client_cancel_after_content_logs_499_without_provider_health_damage() {
     assert!(health.cooldown_until.is_none());
     assert!(next.transports().is_empty());
     first.release.notify_one();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn turn_continues_after_the_gateway_forgets_its_nonce() {
+    let fixture = Fixture::new(true).await;
+    let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+    fixture.provider("A", &upstream.origin(), true);
+    let (gateway, mut logs) = fixture.start().await;
+    let session = "forgotten-nonce";
+    let Message::Text(create) = create_message(Some(session)) else {
+        unreachable!()
+    };
+    let mut body: Value = serde_json::from_str(&create).unwrap();
+    body["input"][0]["type"] = json!("message");
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+        [protocol::TURN_STATE_HEADER]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    recv_until(&mut socket, "response.completed").await;
+    assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+    drop(socket);
+
+    // Restarting AIO or toggling WS settings forgets every owner; Codex keeps the nonce.
+    fixture.runtime.invalidate();
+    body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+    body["input"] = json!([body["input"][0], events("A")[2]["item"], body["input"][0]]);
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let echoed = recv_until(&mut socket, "response.metadata").await;
+    assert_eq!(echoed["headers"][protocol::TURN_STATE_HEADER], nonce);
+    recv_until(&mut socket, "response.completed").await;
+    assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+    assert_eq!(stub.transports(), ["ws", "ws"]);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn codex_preempted_generation_continues_the_same_turn_on_a_new_socket() {
+    let fixture = Fixture::new(true).await;
+    let (stub, upstream) = Stub::start("A", Behavior::HoldAfterContent).await;
+    fixture.provider("A", &upstream.origin(), true);
+    let (gateway, mut logs) = fixture.start().await;
+    let session = "codex-preempt";
+    let Message::Text(create) = create_message(Some(session)) else {
+        unreachable!()
+    };
+    let mut body: Value = serde_json::from_str(&create).unwrap();
+    body["input"][0]["type"] = json!("message");
+    let user = |text: &str| json!({"type":"message","role":"user","content":[{"type":"input_text","text":text}]});
+    let answer = events("A")[2]["item"].clone();
+
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+        [protocol::TURN_STATE_HEADER]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    recv_until(&mut socket, "response.output_text.delta").await;
+    stub.release.notify_waiters();
+    recv_until(&mut socket, "response.completed").await;
+    assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+    socket.close(None).await.unwrap();
+    drop(socket);
+
+    // Steering or sub-agent input makes Codex abandon the in-flight stream...
+    body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+    body["input"] = json!([body["input"][0], answer, user("tool result")]);
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    recv_until(&mut socket, "response.output_text.delta").await;
+    socket.close(None).await.unwrap();
+    drop(socket);
+    assert_eq!(terminal_log(&mut logs).await.status, Some(499));
+
+    // ...and resend the same turn, with the sub-agent message, on a fresh socket.
+    body["input"].as_array_mut().unwrap().push(json!({
+        "type":"agent_message", "id":"amsg_worker", "author":"/root/worker", "recipient":"/root",
+        "content":[{"type":"input_text","text":"Message Type: FINAL_ANSWER"},{"type":"encrypted_content","encrypted_content":"opaque"}],
+        "internal_chat_message_metadata_passthrough":{"turn_id":"turn","create_time":1.5}
+    }));
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    recv_until(&mut socket, "response.output_text.delta").await;
+    stub.release.notify_waiters();
+    let completed = recv_until(&mut socket, "response.completed").await;
+    assert_eq!(completed["response"]["id"], "resp-A");
+    assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+    assert_eq!(stub.transports(), ["ws", "ws", "ws"]);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -1789,4 +2471,653 @@ async fn custom_headers_local_cx2cc_gateway_uses_final_codex_provider() {
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].0, "http");
     assert_eq!(calls[0].1["x-tenant"], "final-tenant");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn unavailable_cache_is_scoped_to_final_candidates() {
+    let fixture = Fixture::new(true).await;
+    let (first, first_server) = Stub::start("A", Behavior::Complete).await;
+    let (next, next_server) = Stub::start("B", Behavior::Complete).await;
+    let a = fixture.provider("A", &first_server.origin(), false);
+    fixture.provider("B", &next_server.origin(), false);
+    fixture
+        .circuit
+        .record_failure(a, crate::gateway::util::now_unix_seconds() as i64, None);
+    let (gateway, _logs) = fixture.start().await;
+    let client = reqwest::Client::new();
+    let body =
+        json!({"model":"gpt-test", "stream":true, "input":[{"role":"user","content":"hello"}]});
+    let forced = client
+        .post(format!("{}/v1/responses", gateway.origin()))
+        .header("session-id", "review-cache")
+        .header("x-aio-provider-id", a.to_string())
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(forced.status().as_u16(), 503);
+    let forced_body: Value = forced.json().await.unwrap();
+    let ordinary = client
+        .post(format!("{}/v1/responses", gateway.origin()))
+        .header("session-id", "review-cache")
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ordinary.status().as_u16(), 200);
+    assert!(ordinary.text().await.unwrap().contains("answer-B"));
+    assert!(first.transports().is_empty());
+    assert_eq!(next.transports(), ["http"]);
+    assert_eq!(forced_body["error_code"], "GW_ALL_PROVIDERS_UNAVAILABLE");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn recovered_budget_does_not_cache_global_unavailability() {
+    use super::protocol::{HistoryDigest, Owner};
+    use super::state::{Budget, Generation, RecoveryIdentity, RequestState};
+    for all_budget_failed in [false, true] {
+        let fixture = Fixture::new(true).await;
+        let (first, first_server) = Stub::start("A", Behavior::Complete).await;
+        let (next, next_server) = Stub::start("B", Behavior::Complete).await;
+        let a = fixture.provider("A", &first_server.origin(), false);
+        let b = fixture.provider("B", &next_server.origin(), false);
+        if !all_budget_failed {
+            fixture.circuit.record_failure(
+                b,
+                crate::gateway::util::now_unix_seconds() as i64,
+                None,
+            );
+        }
+        let metadata = json!({"session_id":"review-recovery", "thread_id":"thread", "window_id":"window", "context_window_id":"context", "turn_id":"turn"}).to_string();
+        let owner = Owner::parse(&metadata).unwrap();
+        let nonce = fixture.runtime.issue_nonce(&owner).unwrap();
+        let body = json!({"model":"gpt-test", "stream":true, "input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}]});
+        let mut budget = Budget {
+            providers: vec![a, b],
+            failed_providers: std::collections::HashSet::from([a]),
+            ..Budget::default()
+        };
+        if all_budget_failed {
+            budget.failed_providers.insert(b);
+        }
+        let original = RequestState {
+            connection: fixture.runtime.connection().unwrap(),
+            client_ws: true,
+            generation: Arc::new(Mutex::new(Generation {
+                identity: Some(RecoveryIdentity {
+                    owner,
+                    nonce: nonce.clone(),
+                }),
+                expected: HistoryDigest::from_items(body["input"].as_array().unwrap()),
+                input: HistoryDigest::from_items(body["input"].as_array().unwrap()),
+                properties: super::state::request_properties(&body, None),
+                previous: None,
+                committed: false,
+                terminal: false,
+                incomplete: false,
+                failed: false,
+                recovered: false,
+                from_trace: None,
+                trace_id: "review-original-upstream-failure".into(),
+                budget,
+                upstream_ws: false,
+            })),
+        };
+        fixture.runtime.begin_generation(&original).unwrap();
+        fixture.runtime.suspend(&original).unwrap();
+        let (gateway, _logs) = fixture.start().await;
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!("{}/v1/responses", gateway.origin()))
+            .header(protocol::TURN_STATE_HEADER, nonce)
+            .header("x-codex-turn-metadata", metadata)
+            .header("session-id", "review-recovery")
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        let recovery_status = response.status().as_u16();
+        let recovery_body: Value = response.json().await.unwrap();
+        let ordinary = client
+            .post(format!("{}/v1/responses", gateway.origin()))
+            .header("session-id", "new-request")
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        let ordinary_status = ordinary.status().as_u16();
+        let ordinary_text = ordinary.text().await.unwrap();
+        assert_eq!(recovery_status, if all_budget_failed { 502 } else { 503 });
+        assert_eq!(
+            recovery_body["error_code"],
+            if all_budget_failed {
+                "GW_UPSTREAM_ALL_FAILED"
+            } else {
+                "GW_ALL_PROVIDERS_UNAVAILABLE"
+            }
+        );
+        assert_eq!(ordinary_status, 200);
+        assert!(ordinary_text.contains("answer-A"));
+        assert_eq!(first.transports(), ["http"]);
+        assert!(next.transports().is_empty());
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn circuit_failure_uses_inbound_protocol_for_every_cli_and_auxiliary_route() {
+    let fixture = Fixture::new(true).await;
+    let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+    let (gateway, _logs) = fixture.start().await;
+    let client = reqwest::Client::new();
+    for (cli, paths, protocol) in [
+        (
+            "codex",
+            vec!["/v1/responses", "/responses", "/v1/chat/completions"],
+            "openai",
+        ),
+        ("grok", vec!["/v1/responses", "/chat/completions"], "openai"),
+        (
+            "claude",
+            vec!["/v1/messages", "/v1/messages/count_tokens"],
+            "anthropic",
+        ),
+        (
+            "gemini",
+            vec![
+                "/v1beta/models/gemini-test:generateContent",
+                "/v1beta/models/gemini-test:streamGenerateContent",
+                "/v1beta/models/gemini-test:countTokens",
+            ],
+            "gemini",
+        ),
+    ] {
+        let provider = fixture.provider_for_cli_with_headers(
+            cli,
+            cli,
+            &upstream.origin(),
+            cli == "codex",
+            None,
+            None,
+        );
+        fixture.circuit.record_failure(
+            provider,
+            crate::gateway::util::now_unix_seconds() as i64,
+            Some("GW_UPSTREAM_TIMEOUT"),
+        );
+        for path in paths {
+            for stream in [false, true] {
+                let url = format!("{}/{cli}/_aio/provider/{provider}{path}", gateway.origin());
+                let body = json!({"model":"test", "stream":stream, "input":[], "messages":[{"role":"user","content":"hello"}], "contents":[{"parts":[{"text":"hello"}]}]});
+                let response = client.post(&url).json(&body).send().await.unwrap();
+                assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE, "{url}");
+                assert!(response.headers()[header::CONTENT_TYPE]
+                    .to_str()
+                    .unwrap()
+                    .starts_with("application/json"));
+                let trace = response.headers()["x-trace-id"]
+                    .to_str()
+                    .unwrap()
+                    .to_owned();
+                assert!(response.headers().contains_key(header::RETRY_AFTER));
+                let error: Value = response.json().await.unwrap();
+                assert_eq!(error["trace_id"], trace);
+                assert_eq!(error["error_code"], "GW_ALL_PROVIDERS_UNAVAILABLE");
+                assert_eq!(error["error"]["message"], error["message"]);
+                assert!(error["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("circuit breakers"));
+                match protocol {
+                    "openai" => {
+                        assert_eq!(error["error"]["code"], "GW_ALL_PROVIDERS_UNAVAILABLE");
+                        assert_eq!(error["error"]["type"], "server_error");
+                    }
+                    "anthropic" => {
+                        assert_eq!(error["type"], "error");
+                        assert_eq!(error["error"]["type"], "api_error");
+                    }
+                    _ => {
+                        assert_eq!(error["error"]["code"], 503);
+                        assert_eq!(error["error"]["status"], "UNAVAILABLE");
+                    }
+                }
+            }
+        }
+    }
+    assert!(stub.transports().is_empty());
+    assert!(fixture.active.snapshot().is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn prewarm_unavailability_does_not_hide_formal_log_or_override_ws_http_retries() {
+    for enabled_provider in [false, true] {
+        let fixture = Fixture::new(true).await;
+        let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+        if enabled_provider {
+            let a = fixture.provider("A", &upstream.origin(), true);
+            fixture.circuit.record_failure(
+                a,
+                crate::gateway::util::now_unix_seconds() as i64,
+                None,
+            );
+        }
+        let (gateway, mut logs) = fixture.start().await;
+        let mut body = json!({"type":"response.create","model":"gpt-test","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"generate":false});
+        let mut warm = connect(&gateway, "unavailable").await.unwrap();
+        warm.send(Message::Text(body.to_string())).await.unwrap();
+        let error = recv_until(&mut warm, "error").await;
+        assert_eq!(error["status"], 503);
+        assert!(logs.try_recv().is_err());
+        assert!(!fixture.runtime.prefers_http("unavailable"));
+        drop(warm);
+
+        body.as_object_mut().unwrap().remove("generate");
+        let metadata = json!({"session_id":"unavailable","thread_id":"thread","window_id":"window","context_window_id":"context","turn_id":"turn"}).to_string();
+        body["client_metadata"] = json!({"x-codex-turn-metadata":metadata});
+        let mut socket = connect(&gateway, "unavailable").await.unwrap();
+        socket.send(Message::Text(body.to_string())).await.unwrap();
+        let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+            [protocol::TURN_STATE_HEADER]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let original = recv_until(&mut socket, "error").await;
+        assert_eq!(original["status"], 503);
+        let code = if enabled_provider {
+            "GW_ALL_PROVIDERS_UNAVAILABLE"
+        } else {
+            "GW_NO_ENABLED_PROVIDER"
+        };
+        assert_eq!(original["error"]["code"], code);
+        let log = terminal_log(&mut logs).await;
+        assert_eq!(log.status, Some(503));
+        assert_eq!(log.trace_id, original["trace_id"].as_str().unwrap());
+        drop(socket);
+
+        body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+        let mut socket = connect(&gateway, "unavailable").await.unwrap();
+        socket.send(Message::Text(body.to_string())).await.unwrap();
+        let replay = recv_until(&mut socket, "error").await;
+        assert_eq!(replay["error"], original["error"]);
+        // A failure with a recovery time is replayed until then; without one the retry
+        // is routed again, still with no upstream call.
+        let routed_again = |trace: &Value| {
+            if enabled_provider {
+                assert_eq!(trace, &original["trace_id"]);
+            } else {
+                assert_ne!(trace, &original["trace_id"]);
+            }
+        };
+        routed_again(&replay["trace_id"]);
+        if enabled_provider {
+            assert_eq!(
+                replay["headers"]["retry-after"],
+                replay["retry_after_seconds"].as_u64().unwrap().to_string()
+            );
+        } else {
+            assert_eq!(terminal_log(&mut logs).await.status, Some(503));
+        }
+        drop(socket);
+
+        let response = reqwest::Client::new()
+            .post(format!("{}/v1/responses", gateway.origin()))
+            .header("session-id", "unavailable")
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let replay: Value = response.json().await.unwrap();
+        assert_eq!(replay["error"], original["error"]);
+        routed_again(&replay["trace_id"]);
+        if !enabled_provider {
+            assert_eq!(terminal_log(&mut logs).await.status, Some(503));
+        }
+        assert!(logs.try_recv().is_err());
+        assert!(stub.transports().is_empty());
+        assert!(fixture.active.snapshot().is_empty());
+
+        // A different request in the turn (e.g. merged steering) is routed again, not replayed.
+        body["input"][0]["content"][0]["text"] = json!("different request");
+        let response = reqwest::Client::new()
+            .post(format!("{}/v1/responses", gateway.origin()))
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let routed: Value = response.json().await.unwrap();
+        assert_eq!(routed["error"]["code"], code);
+        assert!(stub.transports().is_empty());
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn unavailable_tool_delta_on_a_new_socket_returns_the_original_failure() {
+    let fixture = Fixture::new(true).await;
+    let upstream = CliRecoveryStub::default();
+    let server = Server::start(
+        Router::new()
+            .route("/v1/responses", get(cli_recovery_ws))
+            .with_state(upstream.clone()),
+    )
+    .await;
+    let a = fixture.provider("A", &server.origin(), true);
+    let (gateway, mut logs) = fixture.start().await;
+    let Message::Text(create) = create_message(Some("unavailable-tool-delta")) else {
+        unreachable!()
+    };
+    let mut body: Value = serde_json::from_str(&create).unwrap();
+    body["input"][0]["type"] = json!("message");
+    body["tools"] =
+        json!([{"type":"function","name":"shell_command","parameters":{"type":"object"}}]);
+    let mut socket = connect(&gateway, "unavailable-tool-delta").await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+        [protocol::TURN_STATE_HEADER]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    recv_until(&mut socket, "response.completed").await;
+    assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+
+    fixture
+        .circuit
+        .record_failure(a, crate::gateway::util::now_unix_seconds() as i64, None);
+    body["input"] = json!([{"type":"function_call_output","call_id":"router_tool","output":"synthetic result"}]);
+    body["previous_response_id"] = json!("resp-tool");
+    body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let original = recv_until(&mut socket, "error").await;
+    assert_eq!(original["status"], 503);
+    assert_eq!(original["error"]["code"], "GW_ALL_PROVIDERS_UNAVAILABLE");
+    let log = terminal_log(&mut logs).await;
+    assert_eq!(log.status, Some(503));
+    assert_eq!(log.trace_id, original["trace_id"].as_str().unwrap());
+    drop(socket);
+
+    let mut socket = connect(&gateway, "unavailable-tool-delta").await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let replay = recv_until(&mut socket, "error").await;
+    assert_eq!(replay["status"], 503);
+    assert_eq!(replay["error"], original["error"]);
+    assert_eq!(replay["trace_id"], original["trace_id"]);
+    assert!(replay["headers"]["retry-after"].is_string());
+    assert_eq!(upstream.calls.lock().unwrap().len(), 1);
+    assert!(logs.try_recv().is_err());
+    assert!(fixture.active.snapshot().is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn retry_after_circuit_reset_routes_again_instead_of_replaying_the_failure() {
+    let fixture = Fixture::new(true).await;
+    let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+    let a = fixture.provider("A", &upstream.origin(), true);
+    fixture
+        .circuit
+        .record_failure(a, crate::gateway::util::now_unix_seconds() as i64, None);
+    let (gateway, mut logs) = fixture.start().await;
+    let session = "reset-after-unavailable";
+    let Message::Text(create) = create_message(Some(session)) else {
+        unreachable!()
+    };
+    let mut body: Value = serde_json::from_str(&create).unwrap();
+    body["input"][0]["type"] = json!("message");
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+        [protocol::TURN_STATE_HEADER]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let original = recv_until(&mut socket, "error").await;
+    assert_eq!(original["error"]["code"], "GW_ALL_PROVIDERS_UNAVAILABLE");
+    assert!(original["retry_after_seconds"].as_u64().unwrap() > 0);
+    assert_eq!(terminal_log(&mut logs).await.status, Some(503));
+    drop(socket);
+
+    // What GatewayRuntime::circuit_reset_provider does when the user resets the circuit.
+    let now = crate::gateway::util::now_unix_seconds() as i64;
+    fixture.circuit.reset(a, now);
+    fixture.recent_errors.lock().unwrap().clear();
+    fixture.runtime.clear_failures();
+
+    // Codex retries the same full request on a new socket within the old Retry-After window.
+    body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    recv_until(&mut socket, "response.completed").await;
+    assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+    assert_eq!(stub.transports(), ["ws"]);
+}
+
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "requires an explicitly selected real Codex CLI executable"]
+async fn real_codex_cli_reports_circuit_failure_with_finite_retries() {
+    use std::sync::atomic::AtomicUsize;
+    let cli = std::path::PathBuf::from(
+        std::env::var_os("AIO_CODEX_WS_TEST_CLI").expect("selected Codex executable"),
+    );
+    let mut reports = Vec::new();
+    for (stream, request, retry_after) in [
+        (Some(0), Some(0), None),
+        (Some(1), Some(0), Some(1)),
+        (None, Some(0), Some(1)),
+        (Some(0), None, Some(1)),
+        (Some(1), None, Some(1)),
+        (None, None, Some(1)),
+        (Some(0), Some(1), Some(31)),
+    ] {
+        let fixture = Fixture::new(true).await;
+        let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+        let a = fixture.provider("A", &upstream.origin(), true);
+        fixture
+            .circuit
+            .record_failure(a, crate::gateway::util::now_unix_seconds() as i64, None);
+        let pipeline = retry_after.map_or_else(GatewayPluginPipeline::empty_shared, |seconds| {
+            plugin_tests::unavailable_pipeline(Arc::new(AtomicUsize::new(0)), Some(seconds), None)
+        });
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let counts = requests.clone();
+        let (log_tx, mut logs) = tokio::sync::mpsc::channel(32);
+        let router = fixture.router(log_tx, pipeline).layer(axum::middleware::from_fn(move |request: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+            let counts = counts.clone();
+            async move {
+                let method = request.method().to_string();
+                let path = request.uri().path().to_owned();
+                let response = next.run(request).await;
+                counts.lock().unwrap().push(json!({"method":method,"path":path,"status":response.status().as_u16(),"trace_id":response.headers().get("x-trace-id").and_then(|value| value.to_str().ok())}));
+                response
+            }
+        }));
+        let gateway = Server::start(router).await;
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("work")).unwrap();
+        std::fs::create_dir(root.path().join("codex")).unwrap();
+        let mut config = cli_test_config(&gateway.origin());
+        config = config.replace(
+            "stream_max_retries = 1\n",
+            &stream.map_or_else(String::new, |count| {
+                format!("stream_max_retries = {count}\n")
+            }),
+        );
+        config = config.replace(
+            "request_max_retries = 0\n",
+            &request.map_or_else(String::new, |count| {
+                format!("request_max_retries = {count}\n")
+            }),
+        );
+        std::fs::write(root.path().join("codex/config.toml"), config).unwrap();
+        let version = run_cli(isolated_cli_command(&cli, root.path()).arg("--version")).await;
+        let started = std::time::Instant::now();
+        let output = run_cli_with_timeout(
+            isolated_cli_command(&cli, root.path())
+                .args([
+                    "exec",
+                    "--skip-git-repo-check",
+                    "--ephemeral",
+                    "--ignore-rules",
+                    "--json",
+                    "--color",
+                    "never",
+                    "--cd",
+                ])
+                .arg(root.path().join("work"))
+                .arg("Reply OK."),
+            Duration::from_secs(180),
+        )
+        .await;
+        let elapsed = started.elapsed().as_secs_f64();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let events: Vec<Value> = stdout
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .filter(|event| matches!(event["type"].as_str(), Some("error" | "turn.failed")))
+            .collect();
+        let final_error = events
+            .iter()
+            .find(|event| event["type"] == "turn.failed")
+            .expect("CLI returns a failed turn")
+            .to_string();
+        assert!(!output.status.success());
+        assert!(
+            final_error.contains("No available providers")
+                && final_error.contains("circuit breakers"),
+            "stream={stream:?}, request={request:?}: {final_error}"
+        );
+        assert!(!stdout.contains("ownership mismatch"));
+        assert!(stub.transports().is_empty());
+        assert!(fixture.active.snapshot().is_empty());
+        let mut rows = Vec::new();
+        while let Ok(row) = logs.try_recv() {
+            rows.push(row);
+        }
+        // Reads within Retry-After reuse the first failure; once it passes, each retry is
+        // routed again and logged as its own 503, still without an upstream call.
+        assert!(!rows.is_empty());
+        assert!(rows.iter().all(|row| row.status == Some(503)), "{rows:?}");
+        if retry_after.is_none() || (stream, request) == (Some(0), Some(0)) {
+            assert_eq!(rows.len(), 1, "prewarm and result reads are excluded");
+        }
+        if retry_after == Some(31) {
+            assert!(elapsed >= 30.0, "must cross the pending recovery TTL");
+        }
+        let requests = requests.lock().unwrap();
+        let report = json!({"client":String::from_utf8_lossy(&version.stdout).trim(),"stream_max_retries":stream,"request_max_retries":request,"controlled_retry_after":retry_after,"elapsed_seconds":elapsed,"ws_handshakes":requests.iter().filter(|request| request["status"] == 101).count(),"http_posts":requests.iter().filter(|request| request["method"] == "POST").count(),"upstream_calls":0,"request_log_rows":rows.len(),"requests":*requests,"events":events,"exit":output.status.code()});
+        println!("Codex circuit failure: stream={stream:?}, request={request:?}, wait={retry_after:?}, elapsed={elapsed:.2}s, WS={}, HTTP={}, upstream=0, logs={}", report["ws_handshakes"], report["http_posts"], rows.len());
+        reports.push(report);
+        std::fs::write(
+            "/tmp/aio-codex-unavailable-validation.json",
+            serde_json::to_string_pretty(&reports).unwrap(),
+        )
+        .unwrap();
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "requires an explicitly selected real Claude CLI executable"]
+async fn real_claude_cli_reports_circuit_failure_and_new_request_recovers() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let cli = std::path::PathBuf::from(
+        std::env::var_os("AIO_CLAUDE_TEST_CLI").expect("selected Claude executable"),
+    );
+    let fixture = Fixture::new(true).await;
+    let upstream_calls = Arc::new(AtomicUsize::new(0));
+    let count = upstream_calls.clone();
+    let upstream = Server::start(Router::new().route("/v1/messages", axum::routing::post(move || {
+        let count = count.clone();
+        async move {
+            count.fetch_add(1, Ordering::Relaxed);
+            let events = [
+                json!({"type":"message_start","message":{"id":"msg_local","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}),
+                json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"OK"}}),
+                json!({"type":"content_block_stop","index":0}),
+                json!({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}),
+                json!({"type":"message_stop"}),
+            ];
+            let body: String = events.iter().map(|event| format!("event: {}\ndata: {event}\n\n", event["type"].as_str().unwrap())).collect();
+            ([(header::CONTENT_TYPE, "text/event-stream")], body)
+        }
+    }))).await;
+    let a =
+        fixture.provider_for_cli_with_headers("claude", "A", &upstream.origin(), false, None, None);
+    fixture
+        .circuit
+        .record_failure(a, crate::gateway::util::now_unix_seconds() as i64, None);
+    let hooks = Arc::new(AtomicUsize::new(0));
+    let (gateway, mut logs) = fixture
+        .start_with_pipeline(plugin_tests::unavailable_pipeline(
+            hooks.clone(),
+            Some(1),
+            None,
+        ))
+        .await;
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("work")).unwrap();
+    std::fs::create_dir(root.path().join("claude")).unwrap();
+    let version = run_cli(isolated_cli_command(&cli, root.path()).arg("--version")).await;
+    assert!(version.status.success());
+    let mut command = isolated_cli_command(&cli, root.path());
+    command
+        .env("CLAUDE_CONFIG_DIR", root.path().join("claude"))
+        .env("ANTHROPIC_API_KEY", "local-test-key")
+        .env(
+            "ANTHROPIC_BASE_URL",
+            format!("{}/claude/_aio/provider/{a}", gateway.origin()),
+        )
+        .env("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
+        .args([
+            "--bare",
+            "--print",
+            "--no-session-persistence",
+            "--setting-sources",
+            "",
+            "--tools",
+            "",
+            "--model",
+            "claude-sonnet-4-5",
+            "--output-format",
+            "json",
+            "Reply OK.",
+        ]);
+    let started = std::time::Instant::now();
+    let output = run_cli_with_timeout(&mut command, Duration::from_secs(240)).await;
+    let elapsed = started.elapsed().as_secs_f64();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stdout} {stderr}");
+    assert!(
+        stdout.contains("No available providers") && stdout.contains("circuit breakers"),
+        "{stdout} {stderr}"
+    );
+    assert_eq!(upstream_calls.load(Ordering::Relaxed), 0);
+    assert!(fixture.active.snapshot().is_empty());
+    let mut rows = 0;
+    while let Ok(log) = logs.try_recv() {
+        if let Some(status) = log.status {
+            assert_eq!(status, 503);
+            rows += 1;
+        }
+    }
+    assert!(rows > 0);
+    fixture
+        .circuit
+        .reset(a, crate::gateway::util::now_unix_seconds() as i64);
+    let recovered = run_cli_with_timeout(&mut command, Duration::from_secs(40)).await;
+    assert!(
+        recovered.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&recovered.stdout),
+        String::from_utf8_lossy(&recovered.stderr)
+    );
+    assert!(String::from_utf8_lossy(&recovered.stdout).contains("OK"));
+    assert!(upstream_calls.load(Ordering::Relaxed) > 0);
+    let report = json!({"client":String::from_utf8_lossy(&version.stdout).trim(),"controlled_retry_after":1,"elapsed_seconds":elapsed,"exit":output.status.code(),"error":stdout,"error_hooks":hooks.load(Ordering::Relaxed),"unavailable_upstream_calls":0,"failure_log_rows":rows,"new_request_exit":recovered.status.code(),"new_request_upstream_calls":upstream_calls.load(Ordering::Relaxed)});
+    std::fs::write(
+        "/tmp/aio-claude-unavailable-validation.json",
+        serde_json::to_string_pretty(&report).unwrap(),
+    )
+    .unwrap();
+    println!("Claude circuit failure and recovery: {rows} failure logs, rejected upstream=0, recovered upstream={}", upstream_calls.load(Ordering::Relaxed));
 }

@@ -107,8 +107,6 @@ pub(super) struct ProxyContext<R: tauri::Runtime = tauri::Wry> {
     pub(super) forced_provider_id: Option<i64>,
 
     // -- request fingerprinting --
-    pub(super) fingerprint_key: u64,
-    pub(super) fingerprint_debug: String,
     pub(super) unavailable_fingerprint_key: u64,
     pub(super) unavailable_fingerprint_debug: String,
 }
@@ -170,8 +168,6 @@ impl<R: tauri::Runtime> ProxyContext<R> {
             upstream_stream_idle_timeout_secs: rs.upstream_stream_idle_timeout_secs,
             upstream_request_timeout_non_streaming_secs: rs
                 .upstream_request_timeout_non_streaming_secs,
-            fingerprint_key: self.fingerprint_key,
-            fingerprint_debug: self.fingerprint_debug,
             unavailable_fingerprint_key: self.unavailable_fingerprint_key,
             unavailable_fingerprint_debug: self.unavailable_fingerprint_debug,
             enable_thinking_effort_conflict_rectifier: rs.enable_thinking_effort_conflict_rectifier,

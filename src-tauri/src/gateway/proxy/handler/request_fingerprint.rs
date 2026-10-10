@@ -1,38 +1,27 @@
-//! Pre-provider request fingerprints used only for recent-error-cache gating.
+//! Candidate-scoped request fingerprints used only for recent-error-cache gating.
 //!
-//! These fingerprints intentionally run before provider selection, auth
-//! injection, protocol bridging, and final upstream request mutation.
+//! These fingerprints run after candidate resolution and before provider health
+//! gates, auth injection, protocol bridging, and final upstream request mutation.
 
 use crate::gateway::proxy::caches::RecentErrorCache;
 use crate::gateway::proxy::errors::error_response_with_retry_after;
-use crate::gateway::util::{
-    body_for_introspection, compute_all_providers_unavailable_fingerprint,
-    compute_request_fingerprint, extract_idempotency_key_hash, now_unix_seconds,
-};
+use crate::gateway::util::{compute_all_providers_unavailable_fingerprint, now_unix_seconds};
 use crate::shared::mutex_ext::MutexExt;
-use axum::body::Bytes;
 use axum::response::Response;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub(super) struct RequestFingerprints {
-    pub(super) fingerprint_key: u64,
-    pub(super) fingerprint_debug: String,
     pub(super) unavailable_fingerprint_key: u64,
     pub(super) unavailable_fingerprint_debug: String,
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn build_request_fingerprints(
     cli_key: &str,
     effective_sort_mode_id: Option<i64>,
     method_hint: &str,
     forwarded_path: &str,
-    query: Option<&str>,
-    session_id: Option<&str>,
-    requested_model: Option<&str>,
-    headers: &axum::http::HeaderMap,
-    body_bytes: &Bytes,
+    provider_ids: &[i64],
 ) -> RequestFingerprints {
     let (unavailable_fingerprint_key, unavailable_fingerprint_debug) =
         compute_all_providers_unavailable_fingerprint(
@@ -40,24 +29,9 @@ pub(super) fn build_request_fingerprints(
             effective_sort_mode_id,
             method_hint,
             forwarded_path,
+            provider_ids,
         );
-
-    let idempotency_key_hash = extract_idempotency_key_hash(headers);
-    let introspection_body = body_for_introspection(headers, body_bytes);
-    let (fingerprint_key, fingerprint_debug) = compute_request_fingerprint(
-        cli_key,
-        method_hint,
-        forwarded_path,
-        query,
-        session_id,
-        requested_model,
-        idempotency_key_hash,
-        introspection_body.as_ref(),
-    );
-
     RequestFingerprints {
-        fingerprint_key,
-        fingerprint_debug,
         unavailable_fingerprint_key,
         unavailable_fingerprint_debug,
     }
@@ -70,19 +44,11 @@ pub(super) fn apply_recent_error_cache_gate(
 ) -> Result<String, Box<Response>> {
     let mut cache = recent_errors.lock_or_recover();
     let now_unix = now_unix_seconds() as i64;
-    let cached_error = cache
-        .get_error(
-            now_unix,
-            fingerprints.fingerprint_key,
-            &fingerprints.fingerprint_debug,
-        )
-        .or_else(|| {
-            cache.get_error(
-                now_unix,
-                fingerprints.unavailable_fingerprint_key,
-                &fingerprints.unavailable_fingerprint_debug,
-            )
-        });
+    let cached_error = cache.get_error(
+        now_unix,
+        fingerprints.unavailable_fingerprint_key,
+        &fingerprints.unavailable_fingerprint_debug,
+    );
 
     if let Some(entry) = cached_error {
         return Err(Box::new(error_response_with_retry_after(
@@ -115,8 +81,6 @@ mod tests {
 
     fn fingerprints() -> RequestFingerprints {
         RequestFingerprints {
-            fingerprint_key: 101,
-            fingerprint_debug: "fp-101".to_string(),
             unavailable_fingerprint_key: 202,
             unavailable_fingerprint_debug: "fp-unavailable-202".to_string(),
         }
@@ -148,7 +112,7 @@ mod tests {
             let mut cache = recent_errors.lock().expect("lock recent_errors");
             cache.insert_error(
                 now_unix,
-                fps.fingerprint_key,
+                fps.unavailable_fingerprint_key,
                 CachedGatewayError {
                     trace_id: "trace-cached".to_string(),
                     status: StatusCode::SERVICE_UNAVAILABLE,
@@ -156,7 +120,7 @@ mod tests {
                     message: "cached unavailable".to_string(),
                     retry_after_seconds: Some(30),
                     expires_at_unix: now_unix.saturating_add(30),
-                    fingerprint_debug: fps.fingerprint_debug.clone(),
+                    fingerprint_debug: fps.unavailable_fingerprint_debug.clone(),
                 },
             );
         }

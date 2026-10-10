@@ -9,7 +9,7 @@ use crate::gateway::events::FailoverAttempt;
 use crate::gateway::proxy::abort_guard::RequestAbortGuard;
 use crate::gateway::proxy::caches::CachedGatewayError;
 use crate::gateway::proxy::errors::{
-    apply_gateway_error_hook, error_response, error_response_with_retry_after,
+    apply_gateway_error_hook, error_response, error_response_with_retry_after, GatewayFailure,
 };
 use crate::gateway::proxy::request_end::RequestCompletion;
 use crate::gateway::proxy::GatewayErrorCode;
@@ -26,6 +26,7 @@ pub(super) struct AllUnavailableInput<'a, R: tauri::Runtime = tauri::Wry> {
     pub(super) state: &'a GatewayAppState<R>,
     pub(super) abort_guard: &'a mut RequestAbortGuard<R>,
     pub(super) observe: bool,
+    pub(super) recovered_request: bool,
     pub(super) attempts: Vec<FailoverAttempt>,
     pub(super) cli_key: String,
     pub(super) client_identity: String,
@@ -44,8 +45,6 @@ pub(super) struct AllUnavailableInput<'a, R: tauri::Runtime = tauri::Wry> {
     pub(super) skipped_open: usize,
     pub(super) skipped_cooldown: usize,
     pub(super) skipped_limits: usize,
-    pub(super) fingerprint_key: u64,
-    pub(super) fingerprint_debug: String,
     pub(super) unavailable_fingerprint_key: u64,
     pub(super) unavailable_fingerprint_debug: String,
 }
@@ -57,6 +56,7 @@ pub(super) async fn all_providers_unavailable<R: tauri::Runtime>(
         state,
         abort_guard,
         observe,
+        recovered_request,
         attempts,
         cli_key,
         client_identity,
@@ -75,8 +75,6 @@ pub(super) async fn all_providers_unavailable<R: tauri::Runtime>(
         skipped_open,
         skipped_cooldown,
         skipped_limits,
-        fingerprint_key,
-        fingerprint_debug,
         unavailable_fingerprint_key,
         unavailable_fingerprint_debug,
     } = input;
@@ -87,14 +85,7 @@ pub(super) async fn all_providers_unavailable<R: tauri::Runtime>(
         .filter(|v| *v > 0)
         .map(|v| v as u64);
 
-    let detailed_message = format!(
-        "no provider available (skipped: open={skipped_open}, cooldown={skipped_cooldown}, limits={skipped_limits}) for cli_key={cli_key}",
-    );
-    let message = if verbose_provider_error {
-        detailed_message
-    } else {
-        "No available providers".to_string()
-    };
+    let message = unavailable_message(skipped_open, skipped_cooldown, skipped_limits);
 
     // Disk log: all providers unavailable (circuit breaker / cooldown / limits).
     tracing::error!(
@@ -154,38 +145,71 @@ pub(super) async fn all_providers_unavailable<R: tauri::Runtime>(
     )
     .await;
 
-    if let Some(retry_after_seconds) = retry_after_seconds.filter(|v| *v > 0) {
-        let mut cache = state.recent_errors.lock_or_recover();
-        cache.insert_error(
-            now_unix,
-            unavailable_fingerprint_key,
-            CachedGatewayError {
-                trace_id: trace_id.clone(),
-                status: StatusCode::SERVICE_UNAVAILABLE,
-                error_code: GatewayErrorCode::AllProvidersUnavailable.as_str(),
-                message: message.clone(),
-                retry_after_seconds: Some(retry_after_seconds),
-                expires_at_unix: now_unix.saturating_add(retry_after_seconds as i64),
-                fingerprint_debug: unavailable_fingerprint_debug.clone(),
-            },
-        );
-        cache.insert_error(
-            now_unix,
-            fingerprint_key,
-            CachedGatewayError {
-                trace_id: trace_id.clone(),
-                status: StatusCode::SERVICE_UNAVAILABLE,
-                error_code: GatewayErrorCode::AllProvidersUnavailable.as_str(),
-                message,
-                retry_after_seconds: Some(retry_after_seconds),
-                expires_at_unix: now_unix.saturating_add(retry_after_seconds as i64),
-                fingerprint_debug: fingerprint_debug.clone(),
-            },
-        );
-    }
-
     abort_guard.disarm();
-    apply_gateway_error_hook(&state.db, state.plugin_pipeline.clone(), trace_id, resp).await
+    let response = apply_gateway_error_hook(
+        &state.db,
+        state.plugin_pipeline.clone(),
+        trace_id.clone(),
+        resp,
+    )
+    .await;
+    if observe && !recovered_request {
+        if let Some(failure) = response
+            .extensions()
+            .get::<GatewayFailure>()
+            .and_then(GatewayFailure::unavailable_summary)
+        {
+            if failure.status == StatusCode::SERVICE_UNAVAILABLE
+                && failure.error_code == GatewayErrorCode::AllProvidersUnavailable.as_str()
+                && failure.retry_after_seconds == retry_after_seconds
+                && failure.trace_id == trace_id
+                && response
+                    .headers()
+                    .get("x-trace-id")
+                    .and_then(|value| value.to_str().ok())
+                    == Some(trace_id.as_str())
+                && response
+                    .headers()
+                    .get(axum::http::header::RETRY_AFTER)
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|value| value.parse::<u64>().ok())
+                    == retry_after_seconds
+            {
+                if let Some(seconds) = retry_after_seconds.filter(|seconds| *seconds > 0) {
+                    state.recent_errors.lock_or_recover().insert_error(
+                        now_unix,
+                        unavailable_fingerprint_key,
+                        CachedGatewayError {
+                            trace_id: failure.trace_id,
+                            status: failure.status,
+                            error_code: GatewayErrorCode::AllProvidersUnavailable.as_str(),
+                            message: failure.message,
+                            retry_after_seconds: Some(seconds),
+                            expires_at_unix: now_unix.saturating_add(seconds as i64),
+                            fingerprint_debug: unavailable_fingerprint_debug,
+                        },
+                    );
+                }
+            }
+        }
+    }
+    response
+}
+
+fn unavailable_message(open: usize, cooldown: usize, limits: usize) -> String {
+    if open > 0 && cooldown == 0 && limits == 0 {
+        return "No available providers: all candidate providers have open circuit breakers".into();
+    }
+    let causes = [
+        (open, "circuit breaker open"),
+        (cooldown, "cooling down"),
+        (limits, "usage limit reached"),
+    ]
+    .into_iter()
+    .filter(|(count, _)| *count > 0)
+    .map(|(count, cause)| format!("{cause} ({count})"))
+    .collect::<Vec<_>>();
+    format!("No available providers: {}", causes.join(", "))
 }
 
 pub(super) struct AllFailedInput<'a, R: tauri::Runtime = tauri::Wry> {

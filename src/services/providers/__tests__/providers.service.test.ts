@@ -101,6 +101,8 @@ function createProviderSummary(overrides: Partial<ProviderSummary> = {}): Provid
     model_policy: { version: 1, mode: "all", modelPatterns: [], mappings: [] },
     stream_idle_timeout_seconds: null,
     supports_websockets: false,
+    oauth_min_remaining_percent: null,
+    oauth_use_credits: false,
     extension_values: [],
     custom_headers: [],
     api_key_configured: false,
@@ -277,6 +279,37 @@ describe("services/providers/providers", () => {
       expect(commands.providerUpsert).toHaveBeenLastCalledWith(
         expect.objectContaining({
           supportsWebsockets: supportsWebsockets ?? null,
+        })
+      );
+    }
+  );
+
+  it.each([
+    [null, false],
+    [0, false],
+    [12.5, true],
+  ] as const)(
+    "preserves OAuth threshold %s and credit opt-in %s in IPC",
+    async (threshold, useCredits) => {
+      vi.mocked(commands.providerUpsert).mockResolvedValueOnce({
+        status: "ok",
+        data: createProviderSummary({ cli_key: "codex", auth_mode: "oauth" }),
+      });
+      await providerUpsert({
+        cliKey: "codex",
+        authMode: "oauth",
+        name: "Quota protected",
+        baseUrls: [],
+        baseUrlMode: "order",
+        enabled: true,
+        costMultiplier: 1,
+        oauthMinRemainingPercent: threshold,
+        oauthUseCredits: useCredits,
+      });
+      expect(commands.providerUpsert).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          oauthMinRemainingPercent: threshold,
+          oauthUseCredits: useCredits,
         })
       );
     }
@@ -839,6 +872,10 @@ describe("services/providers/providers", () => {
         limit_5h_reset_at: null,
         limit_weekly_reset_at: null,
         reset_credit_available_count: 3,
+        limit_5h_remaining_percent: null,
+        limit_weekly_remaining_percent: null,
+        routing_limited: false,
+        credits: null,
       } as any,
     });
 
@@ -850,6 +887,10 @@ describe("services/providers/providers", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 3,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
     expect(commands.providerOauthFetchLimits).toHaveBeenCalledWith(50);
   });
@@ -868,6 +909,10 @@ describe("services/providers/providers", () => {
           limit_5h_reset_at: 1_700_000_000,
           limit_weekly_reset_at: 1_700_100_000,
           reset_credit_available_count: 2,
+          limit_5h_remaining_percent: null,
+          limit_weekly_remaining_percent: null,
+          routing_limited: false,
+          credits: null,
         },
         refresh_error: null,
       } as any,
@@ -886,6 +931,10 @@ describe("services/providers/providers", () => {
         limit_5h_reset_at: 1_700_000_000,
         limit_weekly_reset_at: 1_700_100_000,
         reset_credit_available_count: 2,
+        limit_5h_remaining_percent: null,
+        limit_weekly_remaining_percent: null,
+        routing_limited: false,
+        credits: null,
       },
       refresh_error: null,
     });

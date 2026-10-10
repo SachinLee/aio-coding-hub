@@ -94,7 +94,7 @@ pub(in crate::gateway) struct StreamFinalizeCtx<R: tauri::Runtime = tauri::Wry> 
     pub(in crate::gateway) provider_id: i64,
     pub(in crate::gateway) provider_name: String,
     pub(in crate::gateway) base_url: String,
-    pub(in crate::gateway) auth_mode: String,
+    pub(in crate::gateway) oauth_quota_identity: Option<(i64, String)>,
     pub(in crate::gateway) fake_200_detected: bool,
     pub(in crate::gateway) fake_200_quota_exhausted: bool,
     pub(in crate::gateway) activity: Arc<Mutex<StreamActivityTracker>>,

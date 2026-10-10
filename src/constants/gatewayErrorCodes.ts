@@ -18,6 +18,7 @@ export const GatewayErrorCodes = {
   STREAM_ERROR: "GW_STREAM_ERROR",
   STREAM_ABORTED: "GW_STREAM_ABORTED",
   STREAM_IDLE_TIMEOUT: "GW_STREAM_IDLE_TIMEOUT",
+  REQUEST_REJECTED: "GW_REQUEST_REJECTED",
   REQUEST_ABORTED: "GW_REQUEST_ABORTED",
   REQUEST_INTERRUPTED_BY_RESTART: "GW_REQUEST_INTERRUPTED_BY_RESTART",
   REQUEST_INTERRUPTED_BY_GATEWAY_STOP: "GW_REQUEST_INTERRUPTED_BY_GATEWAY_STOP",
@@ -64,6 +65,7 @@ const GatewayErrorShortLabels = {
   [GatewayErrorCodes.STREAM_ERROR]: "流错误",
   [GatewayErrorCodes.STREAM_ABORTED]: "流中断",
   [GatewayErrorCodes.STREAM_IDLE_TIMEOUT]: "流空闲超时",
+  [GatewayErrorCodes.REQUEST_REJECTED]: "请求拒绝",
   [GatewayErrorCodes.REQUEST_ABORTED]: "请求中断",
   [GatewayErrorCodes.REQUEST_INTERRUPTED_BY_RESTART]: "重启中断",
   [GatewayErrorCodes.REQUEST_INTERRUPTED_BY_GATEWAY_STOP]: "网关停止",
@@ -156,6 +158,10 @@ export const GatewayErrorDescriptions = {
   GW_STREAM_IDLE_TIMEOUT: {
     desc: "流式响应空闲超时",
     suggestion: "SSE 流长时间无数据传输。可能是上游 Provider 处理异常卡住。",
+  },
+  GW_REQUEST_REJECTED: {
+    desc: "请求或上下文恢复校验未通过",
+    suggestion: "查看详情中的具体拒绝原因，检查请求输入与恢复归属；必要时开始新的轮次。",
   },
   GW_REQUEST_ABORTED: {
     desc: "请求被中断",

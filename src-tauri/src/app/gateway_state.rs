@@ -10,6 +10,17 @@ pub(crate) struct GatewayState {
     manager: Mutex<GatewayManager>,
 }
 
+#[cfg(test)]
+impl GatewayState {
+    pub(crate) fn with_runtime_for_tests(runtime: GatewayRuntime) -> Self {
+        Self {
+            manager: Mutex::new(GatewayManager {
+                running: Some(runtime),
+            }),
+        }
+    }
+}
+
 fn with_gateway_manager<T, F>(state: &GatewayState, access: F) -> T
 where
     F: FnOnce(&GatewayManager) -> T,

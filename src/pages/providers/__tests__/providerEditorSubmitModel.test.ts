@@ -40,6 +40,78 @@ function makeContext(
 
 describe("pages/providers/providerEditorSubmitModel", () => {
   it.each([
+    ["codex", "oauth", 20, true],
+    ["claude", "oauth", 20, false],
+    ["codex", "api_key", null, false],
+    ["claude", "cx2cc", null, false],
+    ["gemini", "oauth", null, false],
+    ["grok", "oauth", null, false],
+  ] as const)(
+    "submits OAuth quota policy only for supported providers: %s / %s",
+    (cliKey, authMode, threshold, useCredits) => {
+      const result = buildProviderEditorUpsertInput(
+        makeContext({
+          cliKey,
+          authMode,
+          isCodexGatewaySource: true,
+          formValues: {
+            ...DEFAULT_FORM_VALUES,
+            name: "Quota protected",
+            api_key: "sk-test",
+            oauth_min_remaining_percent: "20",
+            oauth_use_credits: true,
+          },
+        })
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.payload).toMatchObject({
+        oauthMinRemainingPercent: threshold,
+        oauthUseCredits: useCredits,
+        enabled: true,
+      });
+    }
+  );
+
+  it.each(["-1", "101", "Infinity", "NaN"])("rejects invalid OAuth threshold %s", (value) => {
+    const result = buildProviderEditorUpsertInput(
+      makeContext({
+        authMode: "oauth",
+        formValues: {
+          ...DEFAULT_FORM_VALUES,
+          name: "Quota protected",
+          oauth_min_remaining_percent: value,
+        },
+      })
+    );
+    expect(result).toMatchObject({ ok: false, error: { kind: "schema" } });
+  });
+
+  it.each([
+    ["", null],
+    ["0", 0],
+    [" 12.5 ", 12.5],
+    ["100", 100],
+  ])("normalizes OAuth threshold %s without opting into credits", (value, expected) => {
+    const result = buildProviderEditorUpsertInput(
+      makeContext({
+        authMode: "oauth",
+        formValues: {
+          ...DEFAULT_FORM_VALUES,
+          name: "Quota protected",
+          oauth_min_remaining_percent: String(value),
+        },
+      })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.payload).toMatchObject({
+      oauthMinRemainingPercent: expected,
+      oauthUseCredits: false,
+    });
+  });
+
+  it.each([
     ["codex", "api_key", true],
     ["codex", "oauth", true],
     ["claude", "api_key", false],

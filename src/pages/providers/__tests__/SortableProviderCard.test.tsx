@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tauriOpenUrl } from "../../../test/mocks/tauri";
 import { SortableProviderCard, type SortableProviderCardProps } from "../SortableProviderCard";
@@ -8,6 +8,7 @@ import {
   type ProviderSummary,
 } from "../../../services/providers/providers";
 import { createTestQueryClient, createQueryWrapper } from "../../../test/utils/reactQuery";
+import { oauthLimitsKeys } from "../../../query/keys";
 
 const sortablePointerDownMock = vi.hoisted(() => vi.fn());
 
@@ -76,6 +77,8 @@ function makeProvider(partial: Partial<ProviderSummary> = {}): ProviderSummary {
     ...partial,
     stream_idle_timeout_seconds: partial.stream_idle_timeout_seconds ?? null,
     supports_websockets: partial.supports_websockets ?? false,
+    oauth_min_remaining_percent: partial.oauth_min_remaining_percent ?? null,
+    oauth_use_credits: partial.oauth_use_credits ?? false,
     extension_values: partial.extension_values ?? [],
     custom_headers: partial.custom_headers ?? [],
   };
@@ -96,9 +99,12 @@ function renderCard(
     ...extraProps,
   };
   const queryClient = createTestQueryClient();
-  return render(<SortableProviderCard {...defaultProps} />, {
-    wrapper: createQueryWrapper(queryClient),
-  });
+  return {
+    ...render(<SortableProviderCard {...defaultProps} />, {
+      wrapper: createQueryWrapper(queryClient),
+    }),
+    queryClient,
+  };
 }
 
 describe("pages/providers/SortableProviderCard", () => {
@@ -203,6 +209,10 @@ describe("pages/providers/SortableProviderCard", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     renderCard({
@@ -221,6 +231,10 @@ describe("pages/providers/SortableProviderCard", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     renderCard({
@@ -242,6 +256,10 @@ describe("pages/providers/SortableProviderCard", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     renderCard({
@@ -267,7 +285,59 @@ describe("pages/providers/SortableProviderCard", () => {
     await waitFor(() => expect(vi.mocked(providerOAuthFetchLimits)).toHaveBeenCalled());
     // React Query queryFn maps null to empty limits; no toast is shown
     expect(screen.queryByText(/5h:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/可用点数/)).not.toBeInTheDocument();
   });
+
+  it("refreshes Codex spendable credits through the OAuth refresh button", async () => {
+    const limits = {
+      limit_short_label: "5h",
+      limit_5h_text: null,
+      limit_weekly_text: null,
+      limit_5h_reset_at: null,
+      limit_weekly_reset_at: null,
+      reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: { has_credits: true, unlimited: false, balance: "62500" },
+    };
+    vi.mocked(providerOAuthFetchLimits).mockResolvedValue(limits);
+
+    renderCard({ id: 87, cli_key: "codex", auth_mode: "oauth" });
+
+    await waitFor(() => expect(screen.getByText("可用点数: 62500")).toBeInTheDocument());
+    vi.mocked(providerOAuthFetchLimits).mockResolvedValue({
+      ...limits,
+      credits: { ...limits.credits, balance: "62400" },
+    });
+    fireEvent.click(screen.getByText("OAuth"));
+
+    await waitFor(() => expect(screen.getByText("可用点数: 62400")).toBeInTheDocument());
+    expect(screen.queryByText("可用点数: 62500")).not.toBeInTheDocument();
+    expect(screen.queryByText(/可重置次数/)).not.toBeInTheDocument();
+  });
+
+  it.each([true, false])(
+    "uses backend quota protection state %s in the provider card",
+    async (limited) => {
+      vi.mocked(providerOAuthFetchLimits).mockResolvedValue({
+        limit_short_label: "5h",
+        limit_5h_text: "10%",
+        limit_weekly_text: "50%",
+        limit_5h_reset_at: null,
+        limit_weekly_reset_at: null,
+        reset_credit_available_count: null,
+        limit_5h_remaining_percent: 10,
+        limit_weekly_remaining_percent: 50,
+        routing_limited: limited,
+        credits: null,
+      });
+      renderCard({ id: 90, cli_key: "codex", auth_mode: "oauth" });
+
+      await waitFor(() => expect(screen.getByText("5h: 10%")).toBeInTheDocument());
+      expect(screen.queryByText("配额保护中") != null).toBe(limited);
+    }
+  );
 
   it("renders Codex OAuth reset count and confirms before resetting", async () => {
     vi.mocked(providerOAuthFetchLimits).mockResolvedValue({
@@ -277,6 +347,10 @@ describe("pages/providers/SortableProviderCard", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 3,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: { has_credits: true, unlimited: false, balance: "62500" },
     });
     vi.mocked(providerOAuthResetCodexQuota).mockResolvedValue({
       success: true,
@@ -289,6 +363,10 @@ describe("pages/providers/SortableProviderCard", () => {
         limit_5h_reset_at: null,
         limit_weekly_reset_at: null,
         reset_credit_available_count: 2,
+        limit_5h_remaining_percent: null,
+        limit_weekly_remaining_percent: null,
+        routing_limited: false,
+        credits: { has_credits: true, unlimited: false, balance: "62500" },
       },
       refresh_error: null,
     });
@@ -305,6 +383,11 @@ describe("pages/providers/SortableProviderCard", () => {
     );
     expect(providerOAuthResetCodexQuota).not.toHaveBeenCalled();
 
+    const credits = screen.getByText("可用点数: 62500");
+    expect(credits.closest("button")).toBeNull();
+    fireEvent.click(credits);
+    expect(screen.queryByText("使用 1 次 Codex 重置次数刷新该账号额度？")).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "可重置次数: 3(点击重置)" }));
 
     expect(screen.getByText("使用 1 次 Codex 重置次数刷新该账号额度？")).toBeInTheDocument();
@@ -315,6 +398,7 @@ describe("pages/providers/SortableProviderCard", () => {
     await waitFor(() => expect(providerOAuthResetCodexQuota).toHaveBeenCalledWith(88));
     await waitFor(() => expect(screen.getByText("5h: 100%")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "可重置次数: 2(点击重置)" })).toBeInTheDocument();
+    expect(screen.getByText("可用点数: 62500")).toBeInTheDocument();
   });
 
   it("does not render reset action for non-Codex OAuth providers", async () => {
@@ -325,6 +409,10 @@ describe("pages/providers/SortableProviderCard", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 3,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     renderCard({
@@ -337,18 +425,113 @@ describe("pages/providers/SortableProviderCard", () => {
     expect(screen.queryByText(/可重置次数/)).not.toBeInTheDocument();
   });
 
-  it("handles fetchLimits error", async () => {
-    vi.mocked(providerOAuthFetchLimits).mockRejectedValue(new Error("fetch error"));
+  it.each([true, false])(
+    "shows unknown quota after an initial fetch failure with protection enabled=%s",
+    async (protectionEnabled) => {
+      vi.mocked(providerOAuthFetchLimits).mockRejectedValue(new Error("fetch error"));
 
-    renderCard({
-      auth_mode: "oauth",
+      renderCard({
+        cli_key: "codex",
+        auth_mode: "oauth",
+        oauth_min_remaining_percent: protectionEnabled ? 5 : null,
+        oauth_use_credits: protectionEnabled,
+      });
+
+      expect(await screen.findByRole("status")).toHaveTextContent("刷新失败，额度状态未知");
+      expect(screen.queryByText(/5h:/)).not.toBeInTheDocument();
+      expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
+    }
+  );
+
+  it.each([
+    { protectionEnabled: true, refresh: "manual" },
+    { protectionEnabled: false, refresh: "manual" },
+    { protectionEnabled: true, refresh: "background" },
+    { protectionEnabled: false, refresh: "background" },
+  ])(
+    "marks cached quota stale after $refresh failure and recovers with protection enabled=$protectionEnabled",
+    async ({ protectionEnabled, refresh }) => {
+      const limits = {
+        limit_short_label: "5h",
+        limit_5h_text: "80%",
+        limit_weekly_text: "80%",
+        limit_5h_reset_at: null,
+        limit_weekly_reset_at: null,
+        reset_credit_available_count: null,
+        limit_5h_remaining_percent: 80,
+        limit_weekly_remaining_percent: 80,
+        routing_limited: false,
+        credits: { has_credits: true, unlimited: false, balance: "62500" },
+      };
+      vi.mocked(providerOAuthFetchLimits).mockResolvedValue(limits);
+      const { queryClient } = renderCard({
+        id: 990,
+        cli_key: "codex",
+        auth_mode: "oauth",
+        oauth_min_remaining_percent: protectionEnabled ? 90 : null,
+        oauth_use_credits: protectionEnabled,
+      });
+
+      await screen.findByText("可用点数: 62500");
+      expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
+      vi.mocked(providerOAuthFetchLimits).mockRejectedValue(new Error("quota fetch timed out"));
+
+      if (refresh === "manual") {
+        fireEvent.click(screen.getByText("OAuth"));
+      } else {
+        await act(async () => {
+          await queryClient.refetchQueries({ queryKey: oauthLimitsKeys.detail(990) });
+        });
+      }
+
+      await waitFor(() =>
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "刷新失败，额度状态未知（显示上次数据）"
+        )
+      );
+      expect(screen.getByText("5h: 80%")).toBeInTheDocument();
+      expect(screen.getByText("可用点数: 62500")).toBeInTheDocument();
+      expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
+
+      vi.mocked(providerOAuthFetchLimits).mockResolvedValue({
+        ...limits,
+        limit_5h_text: "75%",
+        limit_5h_remaining_percent: 75,
+        credits: { ...limits.credits, balance: "62400" },
+      });
+      fireEvent.click(screen.getByText("OAuth"));
+
+      await screen.findByText("可用点数: 62400");
+      expect(screen.getByText("5h: 75%")).toBeInTheDocument();
+      expect(screen.queryByText(/刷新失败/)).not.toBeInTheDocument();
+      expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
+    }
+  );
+
+  it("does not present a cached protection result as current after a quota refresh failure", async () => {
+    vi.mocked(providerOAuthFetchLimits).mockResolvedValue({
+      limit_short_label: "5h",
+      limit_5h_text: "0%",
+      limit_weekly_text: null,
+      limit_5h_reset_at: null,
+      limit_weekly_reset_at: null,
+      reset_credit_available_count: null,
+      limit_5h_remaining_percent: 0,
+      limit_weekly_remaining_percent: null,
+      routing_limited: true,
+      credits: null,
     });
+    renderCard({ auth_mode: "oauth" });
 
+    await screen.findByText("配额保护中");
+    vi.mocked(providerOAuthFetchLimits).mockRejectedValue(new Error("fetch error"));
     fireEvent.click(screen.getByText("OAuth"));
 
-    await waitFor(() => expect(vi.mocked(providerOAuthFetchLimits)).toHaveBeenCalled());
-    // React Query absorbs the error; no toast is shown
-    expect(screen.queryByText(/5h:/)).not.toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "刷新失败，额度状态未知（显示上次数据）"
+    );
+    expect(screen.getByText("5h: 0%")).toBeInTheDocument();
+    expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
   });
 
   it("renders note when present", () => {

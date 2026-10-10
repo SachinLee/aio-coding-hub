@@ -528,3 +528,44 @@ fn sse_usage_tracker_drops_oversized_event_data() {
     assert!(tracker.current_data.is_empty());
     assert!(tracker.finalize().is_none());
 }
+
+#[test]
+fn sse_request_rate_limit_does_not_exhaust_account_quota() {
+    let mut tracker = SseUsageTracker::new_for_request("codex", "/v1/responses");
+    tracker.ingest_chunk(b"event: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"rate_limit_exceeded\",\"message\":\"Token quota exceeded. Try again in 20 seconds.\"}}}\n\n");
+    assert!(tracker.fake_200_detected());
+    assert!(!tracker.fake_200_quota_exhausted());
+}
+
+#[test]
+fn sse_hard_quota_type_takes_precedence_over_rate_limit_code() {
+    let mut tracker = SseUsageTracker::new_for_request("codex", "/v1/responses");
+    tracker.ingest_chunk(b"event: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"rate_limit_exceeded\",\"type\":\"usage_limit_reached\",\"message\":\"The usage limit has been reached\"}}}\n\n");
+    assert!(tracker.fake_200_detected());
+    assert!(tracker.fake_200_quota_exhausted());
+}
+
+#[test]
+fn sse_quota_exhaustion_classifies_split_error_events_without_matching_normal_text() {
+    let mut codex = SseUsageTracker::new_for_request("codex", "/v1/responses");
+    codex.ingest_chunk(b"event: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"usage_limit_");
+    codex.ingest_chunk(b"reached\",\"message\":\"You have hit your usage limit\"}}}\n\n");
+    assert!(codex.fake_200_detected());
+    assert!(codex.fake_200_quota_exhausted());
+
+    let mut claude = SseUsageTracker::new_for_request("claude", "/v1/messages");
+    claude.ingest_chunk(
+        b"event: error\ndata: {\"type\":\"error\",\"error\":{\"message\":\"quota exhausted\"}}\n\n",
+    );
+    assert!(claude.fake_200_quota_exhausted());
+
+    let mut normal = SseUsageTracker::new_for_request("codex", "/v1/responses");
+    normal.ingest_chunk(b"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"quota exhausted\"}\n\n");
+    assert!(!normal.fake_200_quota_exhausted());
+
+    let mut other_error = SseUsageTracker::new_for_request("codex", "/v1/responses");
+    other_error
+        .ingest_chunk(b"event: error\ndata: {\"error\":{\"message\":\"invalid request\"}}\n\n");
+    assert!(other_error.fake_200_detected());
+    assert!(!other_error.fake_200_quota_exhausted());
+}

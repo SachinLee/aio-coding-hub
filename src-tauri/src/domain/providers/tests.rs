@@ -435,6 +435,8 @@ fn default_provider_params(name: &str) -> ProviderUpsertParams {
         limit_weekly_usd: None,
         limit_monthly_usd: None,
         limit_total_usd: None,
+        oauth_min_remaining_percent: None,
+        oauth_use_credits: false,
         tags: None,
         note: None,
         source_provider_id: None,
@@ -575,6 +577,8 @@ fn provider_duplicate_copies_extension_values() {
             limit_weekly_usd: source_summary.limit_weekly_usd,
             limit_monthly_usd: source_summary.limit_monthly_usd,
             limit_total_usd: source_summary.limit_total_usd,
+            oauth_min_remaining_percent: None,
+            oauth_use_credits: false,
             tags: Some(source_summary.tags.clone()),
             note: Some(source_summary.note.clone()),
             source_provider_id: source_summary.source_provider_id,
@@ -930,6 +934,8 @@ fn create_oauth_provider_for_cas_test(db: &crate::db::Db, name: &str) -> i64 {
             limit_weekly_usd: None,
             limit_monthly_usd: None,
             limit_total_usd: None,
+            oauth_min_remaining_percent: None,
+            oauth_use_credits: false,
             tags: None,
             note: None,
             source_provider_id: None,
@@ -1416,4 +1422,43 @@ fn custom_headers_persist_across_queries_duplicate_and_partial_updates() {
         .unwrap_err()
         .to_string()
         .contains("source provider"));
+}
+
+#[test]
+fn oauth_quota_policy_persists_updates_and_duplicates() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = crate::db::init_for_tests(&dir.path().join("oauth-policy.db")).unwrap();
+    let mut input = default_provider_params("Quota policy");
+    input.oauth_min_remaining_percent = Some(5.25);
+    input.oauth_use_credits = true;
+    let saved = upsert(&db, input.clone()).unwrap();
+    assert_eq!(saved.oauth_min_remaining_percent, Some(5.25));
+    assert!(saved.oauth_use_credits);
+    input.name = "Quota copy".into();
+    let copy = duplicate(&db, saved.id, input.clone()).unwrap();
+    assert_eq!(copy.oauth_min_remaining_percent, Some(5.25));
+    assert!(copy.oauth_use_credits);
+    input.provider_id = Some(saved.id);
+    input.name = saved.name;
+    input.oauth_min_remaining_percent = None;
+    input.oauth_use_credits = false;
+    let cleared = upsert(&db, input.clone()).unwrap();
+    assert_eq!(cleared.oauth_min_remaining_percent, None);
+    assert!(!cleared.oauth_use_credits);
+    for invalid in [-0.01, 100.01, f64::NAN, f64::INFINITY] {
+        input.oauth_min_remaining_percent = Some(invalid);
+        assert!(upsert(&db, input.clone())
+            .unwrap_err()
+            .to_string()
+            .contains("oauth_min_remaining_percent"));
+    }
+    for valid in [0.0, 100.0] {
+        input.oauth_min_remaining_percent = Some(valid);
+        assert_eq!(
+            upsert(&db, input.clone())
+                .unwrap()
+                .oauth_min_remaining_percent,
+            Some(valid)
+        );
+    }
 }

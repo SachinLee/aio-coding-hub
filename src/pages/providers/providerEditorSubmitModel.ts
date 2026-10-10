@@ -20,12 +20,19 @@ export function buildProviderEditorUpsertInput(
 ):
   | { ok: true; value: ProviderEditorPayloadBuildSuccess }
   | { ok: false; error: ProviderEditorPayloadBuildError } {
+  const supportsQuotaProtection =
+    ctx.authMode === "oauth" && (ctx.cliKey === "codex" || ctx.cliKey === "claude");
   const parsed = createProviderEditorDialogSchema({
     mode: ctx.mode,
     skipApiKeyCheck: ctx.authMode === "cx2cc",
   }).safeParse({
     ...ctx.formValues,
     auth_mode: ctx.authMode === "cx2cc" ? "api_key" : ctx.authMode,
+    oauth_min_remaining_percent: supportsQuotaProtection
+      ? ctx.formValues.oauth_min_remaining_percent
+      : "",
+    oauth_use_credits:
+      supportsQuotaProtection && ctx.cliKey === "codex" && ctx.formValues.oauth_use_credits,
   });
 
   if (!parsed.success) {
@@ -172,6 +179,8 @@ export function buildProviderEditorUpsertInput(
         ? null
         : parsed.data.api_key.trim() || null,
     enabled: parsed.data.enabled,
+    oauthMinRemainingPercent: parsed.data.oauth_min_remaining_percent,
+    oauthUseCredits: parsed.data.oauth_use_credits,
     costMultiplier: effectiveCostMultiplier,
     limit5hUsd: parsed.data.limit_5h_usd,
     limitDailyUsd: parsed.data.limit_daily_usd,

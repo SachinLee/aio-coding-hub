@@ -251,6 +251,9 @@ export const handlers = [
       created_at: existing?.created_at ?? now,
       updated_at: now,
       auth_mode: input.authMode === "oauth" ? "oauth" : "api_key",
+      oauth_min_remaining_percent:
+        typeof input.oauthMinRemainingPercent === "number" ? input.oauthMinRemainingPercent : null,
+      oauth_use_credits: input.oauthUseCredits === true,
       oauth_provider_type: existing?.oauth_provider_type ?? null,
       oauth_email: existing?.oauth_email ?? null,
       oauth_expires_at: existing?.oauth_expires_at ?? null,

@@ -245,3 +245,14 @@ pub(super) fn base_urls_from_row(base_url_fallback: &str, base_urls_json: &str) 
 
     parsed
 }
+
+pub(crate) fn validate_oauth_min_remaining_percent(
+    value: Option<f64>,
+) -> crate::shared::error::AppResult<Option<f64>> {
+    if value.is_some_and(|value| !value.is_finite() || !(0.0..=100.0).contains(&value)) {
+        return Err(
+            "SEC_INVALID_INPUT: oauth_min_remaining_percent must be within [0, 100]".into(),
+        );
+    }
+    Ok(value)
+}

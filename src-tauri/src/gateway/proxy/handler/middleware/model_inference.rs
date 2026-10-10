@@ -1,5 +1,5 @@
-//! Middleware: infers the requested model from path/query/JSON body, computes
-//! observe_request flag, and classifies the request kind (Claude `/compact`).
+//! Middleware: infers the requested model from path/query/JSON body and
+//! classifies the request kind (Claude `/compact`).
 //!
 //! Also applies the "large body + missing model" diagnostic heuristic aligned
 //! with claude-code-hub's `LARGE_REQUEST_BODY_BYTES`: if the body exceeds
@@ -9,7 +9,6 @@
 //! field) rather than a legitimate request.
 
 use super::{MiddlewareAction, ProxyContext};
-use crate::gateway::proxy::compute_observe_request;
 use crate::gateway::proxy::handler::early_error::{
     build_early_error_log_ctx, early_error_contract, push_special_setting,
     respond_early_error_with_spawn, EarlyErrorKind,
@@ -38,14 +37,6 @@ impl ModelInferenceMiddleware {
         );
         ctx.requested_model = model_info.model;
         ctx.requested_model_location = model_info.location;
-
-        ctx.observe_request = compute_observe_request(
-            &ctx.cli_key,
-            &ctx.req_method,
-            &ctx.forwarded_path,
-            &ctx.headers,
-            ctx.introspection_json.as_ref(),
-        );
 
         ctx.is_compact_request = is_compact_request(
             &ctx.cli_key,

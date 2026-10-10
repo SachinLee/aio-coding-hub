@@ -541,6 +541,8 @@ mod tests {
                 limit_weekly_usd: Some(10.0),
                 limit_monthly_usd: Some(10.0),
                 limit_total_usd: Some(10.0),
+                oauth_min_remaining_percent: None,
+                oauth_use_credits: false,
                 tags: None,
                 note: None,
                 source_provider_id: None,

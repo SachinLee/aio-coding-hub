@@ -312,6 +312,8 @@ pub fn provider_upsert_json<R: tauri::Runtime>(
             limit_weekly_usd,
             limit_monthly_usd,
             limit_total_usd,
+            oauth_min_remaining_percent: None,
+            oauth_use_credits: false,
             tags: None,
             note: None,
             source_provider_id: None,

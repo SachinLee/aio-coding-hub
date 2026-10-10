@@ -15,9 +15,9 @@ use super::{
     RequestEndArgs, RequestEndContextArgs, RequestEndDeps,
 };
 use crate::circuit_breaker;
-use crate::domain::provider_oauth_limits;
 use crate::gateway::events::decision_chain as dc;
 use crate::gateway::events::FailoverAttempt;
+use crate::gateway::oauth::limits::record_exhausted;
 use crate::gateway::proxy::errors::{
     classify_reqwest_error, classify_upstream_status, error_response,
 };
@@ -170,19 +170,6 @@ fn retry_after_reset_at(headers: &axum::http::HeaderMap, now_unix: i64) -> Optio
                 .map(|value| value.timestamp())
                 .filter(|timestamp| *timestamp > 0)
         })
-}
-
-fn save_oauth_quota_exhausted_snapshot(
-    db: &crate::db::Db,
-    provider_id: i64,
-    reset_at: Option<i64>,
-) {
-    if let Err(err) = provider_oauth_limits::save_exhausted_snapshot(db, provider_id, reset_at) {
-        tracing::warn!(
-            provider_id,
-            "failed to save OAuth exhausted quota snapshot: {err}"
-        );
-    }
 }
 
 pub(super) async fn read_response_body_for_error_scan(
@@ -353,7 +340,7 @@ pub(super) async fn handle_non_success_response<R: tauri::Runtime>(
         provider_id,
         provider_name_base,
         provider_base_url_base,
-        auth_mode,
+        oauth_quota_identity,
         provider_index,
         session_reuse,
         ..
@@ -550,20 +537,18 @@ pub(super) async fn handle_non_success_response<R: tauri::Runtime>(
         }
     }
 
-    let oauth_quota_exhausted = auth_mode == "oauth" && matched_rule_id == Some("quota_exhausted");
     let mut circuit_state_before = Some(circuit_before.state.as_str());
     let mut circuit_state_after: Option<&'static str> = None;
     let mut circuit_failure_count = Some(circuit_before.failure_count);
     let circuit_failure_threshold = Some(circuit_before.failure_threshold);
 
     let now_unix = now_unix_seconds() as i64;
-    if oauth_quota_exhausted {
-        save_oauth_quota_exhausted_snapshot(
-            &state.db,
-            provider_id,
-            retry_after_reset_at(&response_headers, now_unix),
-        );
-    }
+    let oauth_quota_exhausted = record_exhausted(
+        &state.db,
+        oauth_quota_identity,
+        matched_rule_id == Some("quota_exhausted"),
+        retry_after_reset_at(&response_headers, now_unix),
+    );
 
     if !is_count_tokens
         && matches!(category, ErrorCategory::ProviderError)

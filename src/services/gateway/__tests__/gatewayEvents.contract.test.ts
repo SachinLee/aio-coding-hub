@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import attemptFixture from "../__fixtures__/gatewayEvents/attempt.json";
 import circuitFixture from "../__fixtures__/gatewayEvents/circuit.json";
 import logFixture from "../__fixtures__/gatewayEvents/log.json";
+import unavailableFixture from "../__fixtures__/gatewayEvents/request_unavailable.json";
 import requestFixture from "../__fixtures__/gatewayEvents/request.json";
 import requestSignalFixture from "../__fixtures__/gatewayEvents/request_signal.json";
 import requestStartFixture from "../__fixtures__/gatewayEvents/request_start.json";
@@ -41,6 +42,49 @@ describe("gateway event payload contract (shared fixtures)", () => {
     // type, so dropping the copy would not fail typecheck).
     expect(normalized?.effective_input_tokens).toBe(1200);
     expect(normalized?.reasoning_effort).toBe("high");
+  });
+
+  it("accepts unavailable terminal failures with skipped suppliers and their own circuit causes", () => {
+    const event = normalizeGatewayRequestEvent(unavailableFixture);
+    expect(event).toMatchObject({ status: 503, error_code: "GW_ALL_PROVIDERS_UNAVAILABLE" });
+    expect(event?.attempts).toHaveLength(2);
+    expect(event?.attempts.every((attempt) => attempt.outcome === "skipped")).toBe(true);
+  });
+
+  it("accepts local Responses ownership rejection without inventing provider attempts", () => {
+    const event = normalizeGatewayRequestEvent({
+      ...requestFixture,
+      trace_id: "trace-nonce-rejected",
+      cli_key: "codex",
+      path: "/v1/responses",
+      status: 400,
+      error_category: "local",
+      error_code: "GW_REQUEST_REJECTED",
+      duration_ms: 1,
+      ttfb_ms: null,
+      attempts: [],
+      input_tokens: null,
+      output_tokens: null,
+      total_tokens: null,
+      cache_read_input_tokens: null,
+      cache_creation_input_tokens: null,
+      cache_creation_5m_input_tokens: null,
+      cache_creation_1h_input_tokens: null,
+      effective_input_tokens: null,
+      claude_model_mapping: null,
+    });
+
+    expect(event).toMatchObject({
+      trace_id: "trace-nonce-rejected",
+      cli_key: "codex",
+      status: 400,
+      error_category: "local",
+      error_code: "GW_REQUEST_REJECTED",
+      ttfb_ms: null,
+      attempts: [],
+      input_tokens: null,
+      output_tokens: null,
+    });
   });
 
   it("accepts null forms of the optional gateway:request fields", () => {

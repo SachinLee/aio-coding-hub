@@ -435,7 +435,10 @@ fn sse_event_to_ir(
     data: &Value,
     state: &mut StreamState,
 ) -> Result<Vec<IRStreamChunk>, BridgeError> {
-    match event_type {
+    if state.terminal_seen {
+        return Ok(Vec::new());
+    }
+    let chunks = match event_type {
         "response.created" => handle_response_created(data, state),
         "response.output_item.added" => handle_output_item_added(data, state),
         "response.output_text.delta" | "response.content_part.delta" => {
@@ -444,8 +447,45 @@ fn sse_event_to_ir(
         "response.function_call_arguments.delta" => handle_function_args_delta(data, state),
         "response.output_item.done" => handle_output_item_done(data, state),
         "response.completed" => handle_response_completed(data, state),
+        "error" | "response.failed" => {
+            let error = data
+                .pointer("/response/error")
+                .or_else(|| data.get("error"))
+                .unwrap_or(data);
+            let code = error
+                .get("code")
+                .and_then(Value::as_str)
+                .or_else(|| error.get("type").and_then(Value::as_str))
+                .unwrap_or("api_error");
+            // Preserve quota semantics before the upstream type is removed by IR.
+            let code = if !crate::shared::upstream_quota::is_quota_exhausted_code(code)
+                && crate::shared::upstream_quota::match_quota_exhausted(
+                    error.to_string().as_bytes(),
+                ) {
+                "quota_exhausted"
+            } else {
+                code
+            };
+            Ok(vec![IRStreamChunk::Error {
+                code: code.to_string(),
+                message: error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Upstream response failed")
+                    .to_string(),
+            }])
+        }
         _ => Ok(Vec::new()),
+    }?;
+    if chunks.iter().any(|chunk| {
+        matches!(
+            chunk,
+            IRStreamChunk::MessageStop | IRStreamChunk::Error { .. }
+        )
+    }) {
+        state.terminal_seen = true;
     }
+    Ok(chunks)
 }
 
 fn handle_response_created(

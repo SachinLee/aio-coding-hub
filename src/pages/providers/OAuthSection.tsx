@@ -1,12 +1,15 @@
 import { FormField } from "../../ui/FormField";
 import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
+import { Switch } from "../../ui/Switch";
 import { formatUnixSeconds } from "../../utils/formatters";
 import type { UseProviderEditorFormReturn } from "./useProviderEditorForm";
 
 export function OAuthSection(props: { form: UseProviderEditorFormReturn }) {
   const {
     register,
+    watch,
+    setValue,
     saving,
     cliKey,
     oauthStatus,
@@ -115,6 +118,44 @@ export function OAuthSection(props: { form: UseProviderEditorFormReturn }) {
           )}
         </div>
       </FormField>
+
+      {cliKey === "claude" || cliKey === "codex" ? (
+        <FormField
+          label="最低订阅剩余额度（%）"
+          hint="任一 5 小时或周额度不高于此值时暂停路由；留空不设置预留阈值。"
+        >
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              min="0"
+              max="100"
+              step="any"
+              placeholder="不设置"
+              disabled={saving}
+              {...register("oauth_min_remaining_percent")}
+            />
+          )}
+        </FormField>
+      ) : null}
+
+      {cliKey === "codex" ? (
+        <FormField
+          label="额度不足时使用点数"
+          hint="启用且有可用点数时，忽略预留阈值继续请求；上游可能先使用剩余订阅额度，硬限制仍生效。"
+        >
+          {(id) => (
+            <Switch
+              id={id}
+              checked={watch("oauth_use_credits")}
+              onCheckedChange={(checked) =>
+                setValue("oauth_use_credits", checked, { shouldDirty: true })
+              }
+              disabled={saving}
+            />
+          )}
+        </FormField>
+      ) : null}
 
       <FormField label="价格倍率">
         <Input

@@ -97,6 +97,15 @@ where
     }
 }
 
+pub(crate) fn app_gateway_clear_unavailable_errors<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> usize {
+    super::gateway_state::try_with_app_running_gateway(app, |running| {
+        running.map_or(0, |runtime| runtime.clear_unavailable_errors())
+    })
+    .unwrap_or_default()
+}
+
 pub(crate) fn app_gateway_clear_cli_route_runtime_state<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     cli_key: &str,

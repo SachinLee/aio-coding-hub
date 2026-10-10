@@ -4,7 +4,7 @@
 //! via a source provider, including credential resolution, protocol bridge
 //! invocation, base URL override, and Codex session ID completion.
 
-use super::provider_iterator::SkipReason;
+use super::provider_iterator::{IterationCounters, SkipReason};
 use super::*;
 use crate::app::gateway_runtime_access::app_gateway_status;
 use crate::gateway::proxy::protocol_bridge::{self, BridgeContext};
@@ -27,6 +27,7 @@ pub(super) struct Cx2ccResult {
 pub(super) struct Cx2ccPreparationInput<'a, R: tauri::Runtime = tauri::Wry> {
     pub(super) ctx: CommonCtx<'a, R>,
     pub(super) input: &'a RequestContext<R>,
+    pub(super) counters: &'a mut IterationCounters,
     pub(super) provider_id: i64,
     pub(super) provider_name_base: &'a str,
     pub(super) source_id: Option<i64>,
@@ -76,6 +77,21 @@ pub(super) async fn prepare<R: tauri::Runtime>(args: Cx2ccPreparationInput<'_, R
                 });
             }
         };
+
+        if !provider_limits::gate_oauth_provider(
+            args.ctx,
+            &source,
+            &mut args.counters.earliest_available_unix,
+            &mut args.counters.skipped_limits,
+        )
+        .await
+        {
+            return Cx2ccOutcome::Skipped(SkipReason {
+                error_category: "rate_limit",
+                error_code: GatewayErrorCode::ProviderRateLimited.as_str(),
+                reason: format!("cx2cc source provider {source_id} skipped by OAuth quota"),
+            });
+        }
 
         let source_cred = match resolve_effective_credential(
             &args.input.state,

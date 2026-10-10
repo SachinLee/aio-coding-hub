@@ -78,6 +78,23 @@ impl BodyReaderMiddleware {
         ctx.introspection_json =
             serde_json::from_slice::<serde_json::Value>(request_body_state.decoded().as_ref()).ok();
 
+        ctx.observe_request = compute_observe_request(
+            &ctx.cli_key,
+            &ctx.req_method,
+            &ctx.forwarded_path,
+            &ctx.headers,
+            ctx.introspection_json.as_ref(),
+        );
+        if ctx.ws_connection.is_some()
+            && ctx
+                .introspection_json
+                .as_ref()
+                .is_some_and(|body| body.get("generate") == Some(&serde_json::Value::Bool(false)))
+        {
+            ctx.observe_request = false;
+            ctx.provider_health_neutral = true;
+        }
+
         if ctx.cli_key == "codex" {
             if ctx.ws_request.is_none()
                 && ctx.ws_connection.is_none()
@@ -93,19 +110,72 @@ impl BodyReaderMiddleware {
                         body,
                         ctx.forced_provider_id,
                     ) {
-                        Ok(request) => ctx.ws_request = request,
+                        Ok(crate::gateway::responses_ws::state::PreparedRequest::Dispatch(
+                            request,
+                        )) => ctx.ws_request = request,
+                        Ok(crate::gateway::responses_ws::state::PreparedRequest::Failure(
+                            failure,
+                        )) => return MiddlewareAction::ShortCircuit(failure.into_response()),
                         Err(message) => {
-                            return MiddlewareAction::ShortCircuit(
-                                axum::response::IntoResponse::into_response((
-                                    StatusCode::BAD_REQUEST,
-                                    axum::Json(
-                                        crate::gateway::responses_ws::protocol::error_event(
-                                            "invalid_request",
-                                            message,
-                                        ),
+                            use crate::gateway::proxy::request_end::{
+                                emit_request_event_and_enqueue_request_log, RequestCompletion,
+                                RequestEndArgs, RequestEndContextArgs, RequestEndDeps,
+                            };
+                            response_fixer::push_special_setting(
+                                &ctx.special_settings,
+                                serde_json::json!({
+                                    "type":"codex_responses_transport", "scope":"request", "client_transport":"http", "failure_class":"local", "reason_code":"invalid_request", "upstream_sent":false,
+                                }),
+                            );
+                            emit_request_event_and_enqueue_request_log(
+                                RequestEndArgs::from_context(RequestEndContextArgs {
+                                    client_identity: &ctx.client_identity,
+                                    deps: RequestEndDeps::new(
+                                        &ctx.state.app,
+                                        &ctx.state.db,
+                                        &ctx.state.log_tx,
+                                        &ctx.state.plugin_pipeline,
+                                        &ctx.state.active_requests,
                                     ),
-                                )),
+                                    trace_id: &ctx.trace_id,
+                                    cli_key: &ctx.cli_key,
+                                    method: &ctx.method_hint,
+                                    path: &ctx.forwarded_path,
+                                    observe: ctx.observe_request,
+                                    query: ctx.query.as_deref(),
+                                    excluded_from_stats: false,
+                                    duration_ms: ctx.started.elapsed().as_millis(),
+                                    attempts: &[],
+                                    special_settings_json: response_fixer::special_settings_json(
+                                        &ctx.special_settings,
+                                    ),
+                                    session_id: ctx.session_id.clone(),
+                                    requested_model: ctx.requested_model.clone(),
+                                    created_at_ms: ctx.created_at_ms,
+                                    created_at: ctx.created_at,
+                                })
+                                .with_completion(RequestCompletion::failure(
+                                    400,
+                                    Some("local"),
+                                    GatewayErrorCode::RequestRejected.as_str(),
+                                ))
+                                .with_request_rejection("invalid_request", message),
                             )
+                            .await;
+                            let mut event = crate::gateway::responses_ws::protocol::error_event(
+                                "invalid_request",
+                                message,
+                            );
+                            event["trace_id"] = serde_json::json!(ctx.trace_id);
+                            let mut response = axum::response::IntoResponse::into_response((
+                                StatusCode::BAD_REQUEST,
+                                axum::Json(event),
+                            ));
+                            response.headers_mut().insert(
+                                "x-trace-id",
+                                ctx.trace_id.parse().expect("generated trace id"),
+                            );
+                            return MiddlewareAction::ShortCircuit(response);
                         }
                     }
                 }

@@ -1,6 +1,6 @@
 //! Usage: Shared stream finalize helpers (cooldown/circuit/session).
 
-use crate::domain::provider_oauth_limits;
+use crate::gateway::oauth::limits::record_exhausted;
 
 use super::super::proxy::{provider_router, ErrorCategory, GatewayErrorCode};
 use super::super::util::now_unix_seconds;
@@ -25,19 +25,14 @@ pub(super) fn finalize_circuit_and_session<R: tauri::Runtime>(
     };
 
     let now_unix = now_unix_seconds() as i64;
-    let oauth_quota_exhausted =
-        ctx.auth_mode == "oauth" && ctx.fake_200_detected && ctx.fake_200_quota_exhausted;
-
-    if oauth_quota_exhausted {
-        if let Err(err) =
-            provider_oauth_limits::save_exhausted_snapshot(&ctx.db, ctx.provider_id, None)
-        {
-            tracing::warn!(
-                provider_id = ctx.provider_id,
-                "failed to save OAuth exhausted quota snapshot: {err}"
-            );
-        }
-    }
+    let oauth_quota_exhausted = record_exhausted(
+        &ctx.db,
+        ctx.oauth_quota_identity
+            .as_ref()
+            .map(|(id, token)| (*id, token.as_str())),
+        ctx.fake_200_detected && ctx.fake_200_quota_exhausted,
+        None,
+    );
 
     if error_code.is_some()
         && effective_error_category != Some(ErrorCategory::ClientAbort.as_str())

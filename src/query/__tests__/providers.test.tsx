@@ -110,6 +110,8 @@ function makeProvider(
     },
     stream_idle_timeout_seconds: partial.stream_idle_timeout_seconds ?? null,
     supports_websockets: partial.supports_websockets ?? false,
+    oauth_min_remaining_percent: partial.oauth_min_remaining_percent ?? null,
+    oauth_use_credits: partial.oauth_use_credits ?? false,
     extension_values: partial.extension_values ?? [],
     custom_headers: partial.custom_headers ?? [],
     api_key_configured: partial.api_key_configured ?? false,
@@ -343,6 +345,10 @@ describe("query/providers", () => {
       limit_5h_reset_at: 1700000000,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     vi.mocked(providerOAuthFetchLimits).mockResolvedValue(limits);
 
@@ -380,6 +386,10 @@ describe("query/providers", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 1,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     vi.mocked(providerOAuthFetchLimits).mockResolvedValueOnce(availableLimits);
     vi.mocked(gatewayCircuitResetProvider).mockResolvedValue(true);
@@ -400,6 +410,10 @@ describe("query/providers", () => {
       limit_5h_reset_at: 1_700_100_000,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 0,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     await expect(
@@ -407,6 +421,53 @@ describe("query/providers", () => {
     ).resolves.toMatchObject({ limit_5h_text: "0%" });
 
     expect(gatewayCircuitResetProvider).toHaveBeenCalledWith(11);
+  });
+
+  it("refreshes credits only for the target provider and keeps them after a failed refresh", async () => {
+    const limits = {
+      limit_short_label: "5h",
+      limit_5h_text: null,
+      limit_weekly_text: null,
+      limit_5h_reset_at: null,
+      limit_weekly_reset_at: null,
+      reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: { has_credits: true, unlimited: false, balance: "62500" },
+    };
+    const refreshedLimits = {
+      ...limits,
+      credits: { ...limits.credits, balance: "62400.123456789" },
+    };
+    const client = createTestQueryClient();
+    client.setQueryData(oauthLimitsKeys.detail(11), limits);
+    client.setQueryData(oauthLimitsKeys.detail(22), limits);
+    vi.mocked(providerOAuthFetchLimits).mockResolvedValueOnce(refreshedLimits);
+
+    await refreshProviderOAuthLimits(client, 11);
+
+    expect(readProviderOAuthLimitsCache(client, 11)).toEqual(refreshedLimits);
+    expect(readProviderOAuthLimitsCache(client, 22)).toEqual(limits);
+
+    vi.mocked(providerOAuthFetchLimits).mockRejectedValueOnce(new Error("usage unavailable"));
+    await expect(refreshProviderOAuthLimits(client, 11)).rejects.toThrow("usage unavailable");
+
+    expect(readProviderOAuthLimitsCache(client, 11)).toEqual(refreshedLimits);
+    expect(client.getQueryState(oauthLimitsKeys.detail(11))).toMatchObject({
+      status: "error",
+      error: new Error("usage unavailable"),
+    });
+    expect(client.getQueryState(oauthLimitsKeys.detail(22))?.status).toBe("success");
+
+    vi.mocked(providerOAuthFetchLimits).mockResolvedValueOnce(limits);
+    await refreshProviderOAuthLimits(client, 11);
+
+    expect(client.getQueryState(oauthLimitsKeys.detail(11))).toMatchObject({
+      status: "success",
+      error: null,
+      data: limits,
+    });
   });
 
   it("active OAuth limits refresh keeps refreshed limits when circuit reset fails", async () => {
@@ -419,6 +480,10 @@ describe("query/providers", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 2,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     vi.mocked(providerOAuthFetchLimits).mockResolvedValueOnce(limits);
     vi.mocked(gatewayCircuitResetProvider).mockRejectedValueOnce(new Error("reset boom"));
@@ -443,6 +508,10 @@ describe("query/providers", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 1,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     const otherLimits = {
       limit_short_label: "5h",
@@ -451,6 +520,10 @@ describe("query/providers", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 5,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     const refreshedLimits = {
       limit_short_label: "5h",
@@ -459,6 +532,10 @@ describe("query/providers", () => {
       limit_5h_reset_at: 1_700_000_000,
       limit_weekly_reset_at: 1_700_100_000,
       reset_credit_available_count: 0,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     vi.mocked(providerOAuthResetCodexQuota).mockResolvedValueOnce({
       success: true,
@@ -494,6 +571,10 @@ describe("query/providers", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 1,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     vi.mocked(providerOAuthResetCodexQuota).mockResolvedValueOnce({
       success: true,
@@ -584,6 +665,7 @@ describe("query/providers", () => {
 
     expect(client.getQueryData(providersKeys.list("claude"))).toEqual([saved]);
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: providersKeys.list("claude") });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: oauthLimitsKeys.detail(saved.id) });
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: gatewayKeys.circuitStatus("claude"),
     });

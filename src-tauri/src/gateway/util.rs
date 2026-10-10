@@ -2,7 +2,6 @@ use super::proxy::GatewayErrorCode;
 use axum::http::{header, HeaderMap};
 use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -68,47 +67,6 @@ fn hash_u64_of_bytes(input: &[u8]) -> u64 {
     hasher.finish()
 }
 
-fn header_value_trimmed<'a>(headers: &'a HeaderMap, key: &str) -> Option<&'a str> {
-    headers
-        .get(key)
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-}
-
-pub(super) fn extract_idempotency_key_hash(headers: &HeaderMap) -> Option<u64> {
-    for key in [
-        "idempotency-key",
-        "x-idempotency-key",
-        "x-stainless-idempotency-key",
-    ] {
-        if let Some(value) = header_value_trimmed(headers, key) {
-            return Some(hash_u64_of_bytes(value.as_bytes()));
-        }
-    }
-    None
-}
-
-fn normalize_query_for_fingerprint(query: Option<&str>) -> Option<String> {
-    let raw = query.map(str::trim).filter(|v| !v.is_empty())?;
-    let mut pairs: Vec<&str> = raw.split('&').filter(|part| !part.is_empty()).collect();
-    if pairs.is_empty() {
-        return None;
-    }
-
-    let mut seen_keys: HashSet<&str> = HashSet::with_capacity(pairs.len());
-    let has_duplicate_keys = pairs.iter().any(|part| {
-        let key = part.split_once('=').map(|(k, _)| k).unwrap_or(part);
-        !seen_keys.insert(key)
-    });
-
-    if !has_duplicate_keys {
-        pairs.sort_unstable();
-    }
-
-    Some(pairs.join("&"))
-}
-
 fn utf8_prefix(value: &str, max_bytes: usize) -> &str {
     if value.len() <= max_bytes {
         return value;
@@ -138,62 +96,12 @@ fn fingerprint_debug_component(value: &str) -> Cow<'_, str> {
     ))
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn compute_request_fingerprint(
-    cli_key: &str,
-    method: &str,
-    path: &str,
-    query: Option<&str>,
-    session_id: Option<&str>,
-    requested_model: Option<&str>,
-    idempotency_key_hash: Option<u64>,
-    body_bytes: &[u8],
-) -> (u64, String) {
-    let body_len = body_bytes.len();
-    let body_hash = hash_u64_of_bytes(body_bytes);
-    let normalized_query = normalize_query_for_fingerprint(query);
-    let session_for_fingerprint = if idempotency_key_hash.is_some() {
-        None
-    } else {
-        session_id
-    };
-    let idem_hash = idempotency_key_hash
-        .map(|v| format!("{v:016x}"))
-        .unwrap_or_else(|| "-".to_string());
-    let cli_debug = fingerprint_debug_component(cli_key);
-    let method_debug = fingerprint_debug_component(method);
-    let path_debug = fingerprint_debug_component(path);
-    let query_debug = normalized_query
-        .as_deref()
-        .map(fingerprint_debug_component)
-        .unwrap_or_else(|| Cow::Borrowed("-"));
-    let session_debug = session_for_fingerprint
-        .map(fingerprint_debug_component)
-        .unwrap_or_else(|| Cow::Borrowed("-"));
-    let model_debug = requested_model
-        .map(fingerprint_debug_component)
-        .unwrap_or_else(|| Cow::Borrowed("-"));
-
-    let debug = format!(
-        "v3|cli={}|method={}|path={}|query={}|session={}|model={}|idem_hash={idem_hash}|len={body_len}|body_hash={body_hash:016x}",
-        cli_debug.as_ref(),
-        method_debug.as_ref(),
-        path_debug.as_ref(),
-        query_debug.as_ref(),
-        session_debug.as_ref(),
-        model_debug.as_ref(),
-    );
-
-    let mut hasher = DefaultHasher::new();
-    debug.hash(&mut hasher);
-    (hasher.finish(), debug)
-}
-
 pub(super) fn compute_all_providers_unavailable_fingerprint(
     cli_key: &str,
     sort_mode_id: Option<i64>,
     method: &str,
     path: &str,
+    provider_ids: &[i64],
 ) -> (u64, String) {
     let mode = sort_mode_id
         .map(|v| v.to_string())
@@ -202,8 +110,11 @@ pub(super) fn compute_all_providers_unavailable_fingerprint(
     let mode_debug = fingerprint_debug_component(&mode);
     let method_debug = fingerprint_debug_component(method);
     let path_debug = fingerprint_debug_component(path);
+    let mut candidates = provider_ids.to_vec();
+    candidates.sort_unstable();
+    candidates.dedup();
     let debug = format!(
-        "v2|gw_unavail|cli={}|mode={}|method={}|path={}",
+        "v3|gw_unavail|cli={}|mode={}|method={}|path={}|providers={candidates:?}",
         cli_debug.as_ref(),
         mode_debug.as_ref(),
         method_debug.as_ref(),
@@ -560,11 +471,10 @@ pub(super) fn ensure_cli_required_headers(cli_key: &str, headers: &mut HeaderMap
 mod tests {
     use super::{
         clear_all_auth_headers, compute_all_providers_unavailable_fingerprint,
-        compute_request_fingerprint, infer_requested_model_info, inject_provider_auth,
-        lossy_utf8_preview, normalize_query_for_fingerprint, parse_request_body_limit_mb,
-        redacted_headers_for_debug, RequestedModelLocation, DEFAULT_MAX_REQUEST_BODY_MB,
-        FINGERPRINT_DEBUG_COMPONENT_MAX_BYTES, MAX_DEBUG_HEADER_VALUE_PREVIEW_BYTES,
-        MAX_REQUEST_BODY_MB, MIN_REQUEST_BODY_MB,
+        infer_requested_model_info, inject_provider_auth, lossy_utf8_preview,
+        parse_request_body_limit_mb, redacted_headers_for_debug, RequestedModelLocation,
+        DEFAULT_MAX_REQUEST_BODY_MB, FINGERPRINT_DEBUG_COMPONENT_MAX_BYTES,
+        MAX_DEBUG_HEADER_VALUE_PREVIEW_BYTES, MAX_REQUEST_BODY_MB, MIN_REQUEST_BODY_MB,
     };
     use axum::http::{header, HeaderMap, HeaderValue};
 
@@ -584,18 +494,6 @@ mod tests {
             parse_request_body_limit_mb(Some("not-a-number")),
             DEFAULT_MAX_REQUEST_BODY_MB
         );
-    }
-
-    #[test]
-    fn normalize_query_sorts_unique_key_pairs() {
-        let normalized = normalize_query_for_fingerprint(Some("b=2&a=1&c=3"));
-        assert_eq!(normalized.as_deref(), Some("a=1&b=2&c=3"));
-    }
-
-    #[test]
-    fn normalize_query_keeps_order_when_duplicate_keys_exist() {
-        let normalized = normalize_query_for_fingerprint(Some("a=2&a=1&b=3"));
-        assert_eq!(normalized.as_deref(), Some("a=2&a=1&b=3"));
     }
 
     #[test]
@@ -670,151 +568,15 @@ mod tests {
     }
 
     #[test]
-    fn fingerprint_ignores_query_pair_order_for_unique_keys() {
-        let (left, _) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            "/v1/messages",
-            Some("model=a&stream=true"),
-            Some("session-1"),
-            Some("m1"),
-            None,
-            b"{}",
-        );
-        let (right, _) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            "/v1/messages",
-            Some("stream=true&model=a"),
-            Some("session-1"),
-            Some("m1"),
-            None,
-            b"{}",
-        );
-
-        assert_eq!(left, right);
-    }
-
-    #[test]
-    fn fingerprint_preserves_duplicate_key_order() {
-        let (left, _) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            "/v1/messages",
-            Some("tag=x&tag=y"),
-            Some("session-1"),
-            Some("m1"),
-            None,
-            b"{}",
-        );
-        let (right, _) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            "/v1/messages",
-            Some("tag=y&tag=x"),
-            Some("session-1"),
-            Some("m1"),
-            None,
-            b"{}",
-        );
-
-        assert_ne!(left, right);
-    }
-
-    #[test]
-    fn fingerprint_ignores_session_id_when_idempotency_present() {
-        let (left, _) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            "/v1/messages",
-            Some("model=a"),
-            Some("session-a"),
-            Some("m1"),
-            Some(0x1111),
-            b"{}",
-        );
-        let (right, _) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            "/v1/messages",
-            Some("model=a"),
-            Some("session-b"),
-            Some("m1"),
-            Some(0x1111),
-            b"{}",
-        );
-
-        assert_eq!(left, right);
-    }
-
-    #[test]
-    fn fingerprint_keeps_session_id_when_idempotency_absent() {
-        let (left, _) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            "/v1/messages",
-            Some("model=a"),
-            Some("session-a"),
-            Some("m1"),
-            None,
-            b"{}",
-        );
-        let (right, _) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            "/v1/messages",
-            Some("model=a"),
-            Some("session-b"),
-            Some("m1"),
-            None,
-            b"{}",
-        );
-
-        assert_ne!(left, right);
-    }
-
-    #[test]
-    fn fingerprint_debug_bounds_long_components_without_collapsing_identity() {
-        let long_path = format!("/v1/messages/{}", "p".repeat(2048));
-        let long_query_a = format!("q={}", "a".repeat(2048));
-        let long_query_b = format!("q={}", "b".repeat(2048));
-        let long_session = format!("session-{}", "s".repeat(2048));
-        let long_model = format!("model-{}", "m".repeat(2048));
-
-        let (left, left_debug) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            &long_path,
-            Some(&long_query_a),
-            Some(&long_session),
-            Some(&long_model),
-            None,
-            b"{}",
-        );
-        let (right, right_debug) = compute_request_fingerprint(
-            "claude",
-            "POST",
-            &long_path,
-            Some(&long_query_b),
-            Some(&long_session),
-            Some(&long_model),
-            None,
-            b"{}",
-        );
-
-        assert_ne!(left, right);
-        assert_ne!(left_debug, right_debug);
-        assert!(left_debug.len() < FINGERPRINT_DEBUG_COMPONENT_MAX_BYTES * 8);
-        assert!(left_debug.contains("len="));
-        assert!(left_debug.contains("hash="));
-        assert!(!left_debug.contains(&"a".repeat(FINGERPRINT_DEBUG_COMPONENT_MAX_BYTES + 1)));
-    }
-
-    #[test]
     fn unavailable_fingerprint_debug_bounds_long_path() {
         let long_path = format!("/v1/messages/{}", "p".repeat(4096));
-        let (fingerprint, debug) =
-            compute_all_providers_unavailable_fingerprint("claude", Some(42), "POST", &long_path);
+        let (fingerprint, debug) = compute_all_providers_unavailable_fingerprint(
+            "claude",
+            Some(42),
+            "POST",
+            &long_path,
+            &[1, 2],
+        );
 
         assert_ne!(fingerprint, 0);
         assert!(debug.len() < FINGERPRINT_DEBUG_COMPONENT_MAX_BYTES * 3);

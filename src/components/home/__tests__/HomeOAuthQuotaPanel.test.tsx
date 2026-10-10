@@ -18,6 +18,10 @@ function makeRow(partial: Partial<HomeOAuthQuotaRow>): HomeOAuthQuotaRow {
       limit_5h_reset_at: nowUnix + 2 * 3600 + 34 * 60,
       limit_weekly_reset_at: nowUnix + 3 * 86400 + 2 * 3600 + 29 * 60,
       reset_credit_available_count: 4,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     },
     error: null,
     ...partial,
@@ -69,7 +73,7 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
     expect(screen.getByText("可重置次数: 4")).toBeInTheDocument();
   });
 
-  it("shows insufficient quota when either quota window is exhausted", () => {
+  it("uses the backend routing decision even when displayed quota remains", () => {
     const { rerender } = render(
       <HomeOAuthQuotaPanelContent
         rows={[
@@ -77,10 +81,14 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
             limits: {
               limit_short_label: "5h",
               limit_5h_text: "61%",
-              limit_weekly_text: "0%",
+              limit_weekly_text: "92%",
               limit_5h_reset_at: null,
               limit_weekly_reset_at: null,
               reset_credit_available_count: 1,
+              limit_5h_remaining_percent: null,
+              limit_weekly_remaining_percent: null,
+              routing_limited: true,
+              credits: null,
             },
           }),
         ]}
@@ -92,7 +100,7 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
       />
     );
 
-    expect(screen.getByText("配额不足")).toBeInTheDocument();
+    expect(screen.getByText("配额保护中")).toBeInTheDocument();
 
     rerender(
       <HomeOAuthQuotaPanelContent
@@ -105,6 +113,10 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
               limit_5h_reset_at: null,
               limit_weekly_reset_at: null,
               reset_credit_available_count: 1,
+              limit_5h_remaining_percent: null,
+              limit_weekly_remaining_percent: null,
+              routing_limited: false,
+              credits: null,
             },
           }),
         ]}
@@ -116,7 +128,112 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
       />
     );
 
-    expect(screen.getByText("配额不足")).toBeInTheDocument();
+    expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { has_credits: true, unlimited: false, balance: "62500", expected: "62500" },
+    { has_credits: true, unlimited: false, balance: "0", expected: "0" },
+    {
+      has_credits: true,
+      unlimited: false,
+      balance: "9007199254740993.123456789",
+      expected: "9007199254740993.123456789",
+    },
+    {
+      has_credits: true,
+      unlimited: false,
+      balance: "0.000000000000001",
+      expected: "0.000000000000001",
+    },
+    { has_credits: true, unlimited: false, balance: " 12.50 ", expected: "12.50" },
+    { has_credits: false, unlimited: true, balance: null, expected: "无限" },
+    { has_credits: false, unlimited: false, balance: "62500", expected: "0" },
+    { has_credits: true, unlimited: false, balance: null, expected: "可用" },
+    { has_credits: true, unlimited: false, balance: "", expected: "可用" },
+    { has_credits: true, unlimited: false, balance: "-1", expected: "可用" },
+    { has_credits: true, unlimited: false, balance: "Infinity", expected: "可用" },
+  ])("renders credits-only Codex quota as $expected for $balance", ({ expected, ...credits }) => {
+    render(
+      <HomeOAuthQuotaPanelContent
+        rows={[
+          makeRow({
+            limits: {
+              limit_short_label: "5h",
+              limit_5h_text: null,
+              limit_weekly_text: null,
+              limit_5h_reset_at: null,
+              limit_weekly_reset_at: null,
+              reset_credit_available_count: null,
+              limit_5h_remaining_percent: null,
+              limit_weekly_remaining_percent: null,
+              routing_limited: false,
+              credits,
+            },
+          }),
+        ]}
+        hasProviders={true}
+        hasRefreshed={true}
+        refreshing={false}
+      />
+    );
+
+    expect(screen.getByText(`可用点数: ${expected}`)).toBeInTheDocument();
+    expect(screen.queryByText(/暂无 OAuth 配额信息/)).not.toBeInTheDocument();
+    expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
+    expect(screen.queryByText(/可重置次数/)).not.toBeInTheDocument();
+  });
+
+  it("preserves cached credits when a refresh fails", () => {
+    render(
+      <HomeOAuthQuotaPanelContent
+        rows={[
+          makeRow({
+            state: "error",
+            limits: {
+              ...makeRow({}).limits!,
+              limit_5h_text: null,
+              limit_weekly_text: null,
+              reset_credit_available_count: null,
+              limit_5h_remaining_percent: null,
+              limit_weekly_remaining_percent: null,
+              routing_limited: false,
+              credits: { has_credits: true, unlimited: false, balance: "62500" },
+            },
+          }),
+        ]}
+        hasProviders={true}
+        hasRefreshed={true}
+        refreshing={false}
+      />
+    );
+
+    expect(screen.getByText("可用点数: 62500")).toBeInTheDocument();
+    expect(screen.getByText("刷新失败，请重试")).toBeInTheDocument();
+  });
+
+  it.each(["claude", "gemini"] as const)("hides Codex credits for %s providers", (cliKey) => {
+    render(
+      <HomeOAuthQuotaPanelContent
+        rows={[
+          makeRow({
+            cliKey,
+            limits: {
+              ...makeRow({}).limits!,
+              limit_5h_text: null,
+              limit_weekly_text: null,
+              credits: { has_credits: true, unlimited: false, balance: "62500" },
+            },
+          }),
+        ]}
+        hasProviders={true}
+        hasRefreshed={true}
+        refreshing={false}
+      />
+    );
+
+    expect(screen.queryByText(/可用点数/)).not.toBeInTheDocument();
+    expect(screen.getByText("暂无 OAuth 配额信息")).toBeInTheDocument();
   });
 
   it("does not show insufficient quota for non-exhausted percentages", () => {
@@ -131,6 +248,10 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
               limit_5h_reset_at: null,
               limit_weekly_reset_at: null,
               reset_credit_available_count: 1,
+              limit_5h_remaining_percent: null,
+              limit_weekly_remaining_percent: null,
+              routing_limited: false,
+              credits: null,
             },
           }),
         ]}
@@ -142,10 +263,10 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
       />
     );
 
-    expect(screen.queryByText("配额不足")).not.toBeInTheDocument();
+    expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
   });
 
-  it("shows insufficient quota for exhausted numeric Gemini quota", () => {
+  it("does not infer routing protection from numeric Gemini quota", () => {
     render(
       <HomeOAuthQuotaPanelContent
         rows={[
@@ -158,6 +279,10 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
               limit_5h_reset_at: null,
               limit_weekly_reset_at: null,
               reset_credit_available_count: 1,
+              limit_5h_remaining_percent: null,
+              limit_weekly_remaining_percent: null,
+              routing_limited: false,
+              credits: null,
             },
           }),
         ]}
@@ -169,7 +294,7 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
       />
     );
 
-    expect(screen.getByText("配额不足")).toBeInTheDocument();
+    expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
   });
 
   it("renders loading, empty, and error card states", () => {
@@ -185,7 +310,7 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
     );
 
     expect(screen.getByText("刷新中...")).toBeInTheDocument();
-    expect(screen.queryByText("配额不足")).not.toBeInTheDocument();
+    expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
 
     rerender(
       <HomeOAuthQuotaPanelContent
@@ -199,6 +324,10 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
               limit_5h_reset_at: null,
               limit_weekly_reset_at: null,
               reset_credit_available_count: null,
+              limit_5h_remaining_percent: null,
+              limit_weekly_remaining_percent: null,
+              routing_limited: false,
+              credits: null,
             },
           }),
         ]}
@@ -211,7 +340,8 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
     );
 
     expect(screen.getByText("暂无 OAuth 配额信息")).toBeInTheDocument();
-    expect(screen.queryByText("配额不足")).not.toBeInTheDocument();
+    expect(screen.queryByText(/可用点数/)).not.toBeInTheDocument();
+    expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
 
     rerender(
       <HomeOAuthQuotaPanelContent
@@ -230,7 +360,7 @@ describe("components/home/HomeOAuthQuotaPanel", () => {
       within(screen.getByTestId("oauth-quota-status-1")).getByText("刷新失败")
     ).toBeInTheDocument();
     expect(screen.queryByText("fetch boom")).not.toBeInTheDocument();
-    expect(screen.queryByText("配额不足")).not.toBeInTheDocument();
+    expect(screen.queryByText("配额保护中")).not.toBeInTheDocument();
   });
 
   it("forwards bulk and row refresh actions", () => {

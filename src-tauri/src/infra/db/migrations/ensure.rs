@@ -13,6 +13,7 @@ pub(super) fn apply_ensure_patches(conn: &mut Connection) -> crate::shared::erro
     ensure_provider_limits(conn)?;
     ensure_provider_oauth_columns(conn)?;
     ensure_provider_oauth_limit_snapshots(conn)?;
+    super::v39_to_v40::ensure_oauth_quota_policy(conn)?;
     ensure_sort_mode_providers_enabled(conn)?;
     ensure_provider_route_order_tables(conn)?;
     ensure_usage_indexes(conn)?;

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::circuit_breaker;
-use crate::domain::provider_oauth_limits;
+use crate::gateway::oauth::limits::record_exhausted;
 use crate::gateway::plugins::context::{GatewayPluginHookName, GatewayResponseHookInput};
 use crate::gateway::proxy::{
     detect_fake_200_non_stream_body, gemini_oauth, protocol_bridge, provider_router,
@@ -987,7 +987,15 @@ where
         );
         let quota_exhausted =
             upstream_client_error_rules::match_quota_exhausted(body_bytes.as_ref());
-        let oauth_quota_exhausted = quota_exhausted && provider_ctx_owned.auth_mode == "oauth";
+        let oauth_quota_exhausted = record_exhausted(
+            &state.db,
+            provider_ctx_owned
+                .oauth_quota_identity
+                .as_ref()
+                .map(|(id, token)| (*id, token.as_str())),
+            quota_exhausted,
+            None,
+        );
         let decision = if quota_exhausted {
             FailoverDecision::SwitchProvider
         } else {
@@ -1017,14 +1025,9 @@ where
 
         let now_unix = now_unix_seconds() as i64;
         if oauth_quota_exhausted {
-            if let Err(err) =
-                provider_oauth_limits::save_exhausted_snapshot(&state.db, provider_id, None)
-            {
-                tracing::warn!(
-                    provider_id,
-                    "failed to save OAuth exhausted quota snapshot: {err}"
-                );
-            }
+            // OAuth exhausted snapshot is already persisted by
+            // gateway::oauth::limits::record_exhausted above; skip circuit
+            // recording while the provider is quota exhausted.
         } else if let Some(model) = common
             .requested_model
             .as_deref()

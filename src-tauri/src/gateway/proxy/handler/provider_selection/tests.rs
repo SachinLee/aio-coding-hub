@@ -248,6 +248,8 @@ fn insert_provider(db: &crate::db::Db, name: &str, enabled: bool) -> providers::
             limit_weekly_usd: None,
             limit_monthly_usd: None,
             limit_total_usd: None,
+            oauth_min_remaining_percent: None,
+            oauth_use_credits: false,
             tags: None,
             note: None,
             source_provider_id: None,
@@ -327,11 +329,6 @@ fn resolve_session_bound_provider_id_skips_disabled_bound_provider() {
     providers::set_enabled(&db, id1, false).expect("disable provider 1");
 
     let session = session_manager::SessionManager::new();
-    let circuit = circuit_breaker::CircuitBreaker::new(
-        circuit_breaker::CircuitBreakerConfig::default(),
-        HashMap::new(),
-        None,
-    );
     let now = 1000;
     session.bind_success("claude", "sess_1", id1, None, now);
 
@@ -342,7 +339,6 @@ fn resolve_session_bound_provider_id_skips_disabled_bound_provider() {
     let order = vec![id1, id2];
     let outcome = resolve_session_bound_provider_id(
         &session,
-        &circuit,
         "claude",
         Some("sess_1"),
         now,
@@ -372,11 +368,6 @@ fn resolve_session_bound_provider_id_skips_insertion_when_forced_provider_presen
     providers::set_enabled(&db, id1, false).expect("disable provider 1");
 
     let session = session_manager::SessionManager::new();
-    let circuit = circuit_breaker::CircuitBreaker::new(
-        circuit_breaker::CircuitBreakerConfig::default(),
-        HashMap::new(),
-        None,
-    );
     let now = 1000;
     session.bind_success("claude", "sess_1", id1, None, now);
 
@@ -387,7 +378,6 @@ fn resolve_session_bound_provider_id_skips_insertion_when_forced_provider_presen
     let order = vec![id1, id2];
     let outcome = resolve_session_bound_provider_id(
         &session,
-        &circuit,
         "claude",
         Some("sess_1"),
         now,
@@ -416,11 +406,6 @@ fn resolve_session_bound_provider_id_does_not_insert_when_reuse_disabled() {
     providers::set_enabled(&db, id1, false).expect("disable provider 1");
 
     let session = session_manager::SessionManager::new();
-    let circuit = circuit_breaker::CircuitBreaker::new(
-        circuit_breaker::CircuitBreakerConfig::default(),
-        HashMap::new(),
-        None,
-    );
     let now = 1000;
     session.bind_success("claude", "sess_1", id1, None, now);
 
@@ -431,7 +416,6 @@ fn resolve_session_bound_provider_id_does_not_insert_when_reuse_disabled() {
     let order = vec![id1, id2];
     let outcome = resolve_session_bound_provider_id(
         &session,
-        &circuit,
         "claude",
         Some("sess_1"),
         now,
@@ -458,11 +442,6 @@ fn resolve_session_bound_provider_id_clears_stale_binding_when_bound_provider_no
     let id2 = p2.id;
 
     let session = session_manager::SessionManager::new();
-    let circuit = circuit_breaker::CircuitBreaker::new(
-        circuit_breaker::CircuitBreakerConfig::default(),
-        HashMap::new(),
-        None,
-    );
     let now = 1000;
     session.bind_success("claude", "sess_1", id1, None, now);
 
@@ -475,7 +454,6 @@ fn resolve_session_bound_provider_id_clears_stale_binding_when_bound_provider_no
     let order = vec![id1, id2];
     let outcome = resolve_session_bound_provider_id(
         &session,
-        &circuit,
         "claude",
         Some("sess_1"),
         now,
@@ -510,10 +488,10 @@ fn default_mode_switches_to_enabled_provider_after_bound_provider_disabled_and_c
     let mut enabled =
         providers::list_enabled_for_gateway_in_mode(&db, "claude", None).expect("list enabled");
     assert_eq!(ids(&enabled), vec![p2.id]);
+    assert!(!circuit.should_allow(p1.id, now).allow);
 
     let outcome = resolve_session_bound_provider_id(
         &session,
-        &circuit,
         "claude",
         Some("sess_1"),
         now,
@@ -530,7 +508,7 @@ fn default_mode_switches_to_enabled_provider_after_bound_provider_disabled_and_c
 }
 
 #[test]
-fn sort_mode_ignores_global_provider_enabled_but_open_circuit_falls_back() {
+fn sort_mode_preserves_bound_candidate_for_shared_health_gate() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db_path = dir.path().join("test.db");
     let db = crate::db::init_for_tests(&db_path).expect("init db");
@@ -551,7 +529,6 @@ fn sort_mode_ignores_global_provider_enabled_but_open_circuit_falls_back() {
 
     let outcome = resolve_session_bound_provider_id(
         &session,
-        &circuit,
         "claude",
         Some("sess_1"),
         now,
@@ -562,21 +539,9 @@ fn sort_mode_ignores_global_provider_enabled_but_open_circuit_falls_back() {
         None,
     );
 
-    assert_eq!(ids(&enabled), vec![p2.id]);
+    assert_eq!(ids(&enabled), vec![p1.id, p2.id]);
 
-    // Even though p1 is globally disabled, it was still in the sort_mode candidate list.
-    // Circuit denial caused fallback to p2, but the session binding is intentionally left
-    // pointing at p1 (see original test intent).
-    match outcome {
-        SessionBoundResult::DeniedByCircuit {
-            provider_id,
-            snapshot,
-        } => {
-            assert_eq!(provider_id, p1.id);
-            assert_eq!(snapshot.state, circuit_breaker::CircuitState::Open);
-        }
-        other => panic!("expected DeniedByCircuit, got {:?}", other),
-    }
+    assert!(matches!(outcome, SessionBoundResult::Preferred(id) if id == p1.id));
 
     assert_eq!(
         session.get_bound_provider("claude", "sess_1", now),
@@ -587,7 +552,7 @@ fn sort_mode_ignores_global_provider_enabled_but_open_circuit_falls_back() {
 }
 
 #[test]
-fn acceptance_session_bound_provider_falls_back_when_bound_provider_circuit_is_open() {
+fn session_bound_candidates_are_preserved_when_circuit_is_open() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db_path = dir.path().join("test.db");
     let db = crate::db::init_for_tests(&db_path).expect("init db");
@@ -606,7 +571,6 @@ fn acceptance_session_bound_provider_falls_back_when_bound_provider_circuit_is_o
         providers::list_enabled_for_gateway_in_mode(&db, "claude", None).expect("list enabled");
     let outcome = resolve_session_bound_provider_id(
         &session,
-        &circuit,
         "claude",
         Some("sess_1"),
         now,
@@ -617,16 +581,7 @@ fn acceptance_session_bound_provider_falls_back_when_bound_provider_circuit_is_o
         None,
     );
 
-    // This is the important case for observability: single (or last) bound provider denied by circuit.
-    match outcome {
-        SessionBoundResult::DeniedByCircuit {
-            provider_id,
-            snapshot,
-        } => {
-            assert_eq!(provider_id, id1);
-            assert_eq!(snapshot.state, circuit_breaker::CircuitState::Open);
-        }
-        other => panic!("expected DeniedByCircuit, got {:?}", other),
-    }
-    assert_eq!(ids(&enabled), vec![id2]);
+    assert!(matches!(outcome, SessionBoundResult::Preferred(id) if id == id1));
+    assert_eq!(ids(&enabled), vec![id1, id2]);
+    assert!(!circuit.should_allow(id1, now).allow);
 }

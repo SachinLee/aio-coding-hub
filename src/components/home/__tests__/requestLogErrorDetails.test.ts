@@ -34,7 +34,7 @@ describe("components/home/requestLogErrorDetails", () => {
     expect(resolveRequestLogErrorObservation(createRequestLogDetail())).toBeNull();
   });
 
-  it("parses structured error details and reason-derived fields", () => {
+  it.each(["upstream", "local"])("parses explicit error details (%s)", (errorCategory) => {
     const observation = resolveRequestLogErrorObservation(
       createRequestLogDetail({
         status: 502,
@@ -46,7 +46,7 @@ describe("components/home/requestLogErrorDetails", () => {
           circuit_state_after: "OPEN",
           circuit_state_before: "CLOSED",
           decision: "skip",
-          error_category: "upstream",
+          error_category: errorCategory,
           error_code: "GW_PROVIDER_CIRCUIT_OPEN",
           outcome: "failure",
           provider_id: 42,
@@ -70,7 +70,7 @@ describe("components/home/requestLogErrorDetails", () => {
         circuitStateBefore: "CLOSED",
         decision: "skip",
         displayErrorCode: "GW_PROVIDER_CIRCUIT_OPEN",
-        errorCategory: "upstream",
+        errorCategory,
         gatewayErrorCode: "GW_UPSTREAM_5XX",
         matchedRule: "provider_circuit",
         outcome: "failure",
@@ -233,6 +233,7 @@ describe("components/home/requestLogErrorDetails", () => {
           provider_name: "Provider B",
           outcome: "skipped",
           error_code: GatewayErrorCodes.PROVIDER_CIRCUIT_OPEN,
+          circuit_trigger_error_code: GatewayErrorCodes.UPSTREAM_TIMEOUT,
           circuit_recover_at_unix: 1_750_002_000,
         }),
       ]);
@@ -248,6 +249,29 @@ describe("components/home/requestLogErrorDetails", () => {
         },
       ]);
     });
+
+    it.each([GatewayErrorCodes.UPSTREAM_4XX, undefined])(
+      "does not assign one provider's trigger to a mixed or unknown group (%s)",
+      (otherCause) => {
+        const summary = buildAttemptFailureSummary([
+          createAttempt({
+            error_code: GatewayErrorCodes.PROVIDER_CIRCUIT_OPEN,
+            circuit_trigger_error_code: GatewayErrorCodes.UPSTREAM_TIMEOUT,
+          }),
+          createAttempt({
+            provider_id: 2,
+            error_code: GatewayErrorCodes.PROVIDER_CIRCUIT_OPEN,
+            circuit_trigger_error_code: otherCause,
+          }),
+          createAttempt({
+            provider_id: 3,
+            error_code: GatewayErrorCodes.PROVIDER_CIRCUIT_OPEN,
+            circuit_trigger_error_code: GatewayErrorCodes.UPSTREAM_TIMEOUT,
+          }),
+        ]);
+        expect(summary?.[0]?.circuitTriggerErrorCode).toBeNull();
+      }
+    );
 
     it("degrades to null attribution when the new fields are absent (legacy logs)", () => {
       const summary = buildAttemptFailureSummary([

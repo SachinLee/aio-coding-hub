@@ -17,7 +17,7 @@ const REQUEST_END_LOG_SHORT_TEXT_MAX_CHARS: usize = 512;
 const REQUEST_END_LOG_URL_MAX_CHARS: usize = 2048;
 const REQUEST_END_LOG_REASON_MAX_CHARS: usize = 2048;
 
-pub(super) struct RequestEndDeps<'a, R: tauri::Runtime = tauri::Wry> {
+pub(in crate::gateway) struct RequestEndDeps<'a, R: tauri::Runtime = tauri::Wry> {
     pub(super) app: &'a tauri::AppHandle<R>,
     pub(super) db: &'a db::Db,
     pub(super) log_tx: &'a tokio::sync::mpsc::Sender<request_logs::RequestLogInsert>,
@@ -26,7 +26,7 @@ pub(super) struct RequestEndDeps<'a, R: tauri::Runtime = tauri::Wry> {
 }
 
 impl<'a, R: tauri::Runtime> RequestEndDeps<'a, R> {
-    pub(super) fn new(
+    pub(in crate::gateway) fn new(
         app: &'a tauri::AppHandle<R>,
         db: &'a db::Db,
         log_tx: &'a tokio::sync::mpsc::Sender<request_logs::RequestLogInsert>,
@@ -43,7 +43,7 @@ impl<'a, R: tauri::Runtime> RequestEndDeps<'a, R> {
     }
 }
 
-pub(super) struct RequestCompletion {
+pub(in crate::gateway) struct RequestCompletion {
     pub(super) status: Option<u16>,
     pub(super) error_category: Option<&'static str>,
     pub(super) error_code: Option<&'static str>,
@@ -74,7 +74,7 @@ impl RequestCompletion {
         }
     }
 
-    pub(super) fn failure(
+    pub(in crate::gateway) fn failure(
         status: u16,
         error_category: Option<&'static str>,
         error_code: &'static str,
@@ -118,26 +118,26 @@ impl RequestCompletion {
     }
 }
 
-pub(super) struct RequestEndContextArgs<'a, R: tauri::Runtime = tauri::Wry> {
-    pub(super) deps: RequestEndDeps<'a, R>,
-    pub(super) trace_id: &'a str,
-    pub(super) cli_key: &'a str,
-    pub(super) client_identity: &'a str,
-    pub(super) method: &'a str,
-    pub(super) path: &'a str,
-    pub(super) observe: bool,
-    pub(super) query: Option<&'a str>,
-    pub(super) excluded_from_stats: bool,
-    pub(super) duration_ms: u128,
-    pub(super) attempts: &'a [FailoverAttempt],
-    pub(super) special_settings_json: Option<String>,
-    pub(super) session_id: Option<String>,
-    pub(super) requested_model: Option<String>,
-    pub(super) created_at_ms: i64,
-    pub(super) created_at: i64,
+pub(in crate::gateway) struct RequestEndContextArgs<'a, R: tauri::Runtime = tauri::Wry> {
+    pub(in crate::gateway) deps: RequestEndDeps<'a, R>,
+    pub(in crate::gateway) trace_id: &'a str,
+    pub(in crate::gateway) cli_key: &'a str,
+    pub(in crate::gateway) client_identity: &'a str,
+    pub(in crate::gateway) method: &'a str,
+    pub(in crate::gateway) path: &'a str,
+    pub(in crate::gateway) observe: bool,
+    pub(in crate::gateway) query: Option<&'a str>,
+    pub(in crate::gateway) excluded_from_stats: bool,
+    pub(in crate::gateway) duration_ms: u128,
+    pub(in crate::gateway) attempts: &'a [FailoverAttempt],
+    pub(in crate::gateway) special_settings_json: Option<String>,
+    pub(in crate::gateway) session_id: Option<String>,
+    pub(in crate::gateway) requested_model: Option<String>,
+    pub(in crate::gateway) created_at_ms: i64,
+    pub(in crate::gateway) created_at: i64,
 }
 
-pub(super) struct RequestEndArgs<'a, R: tauri::Runtime = tauri::Wry> {
+pub(in crate::gateway) struct RequestEndArgs<'a, R: tauri::Runtime = tauri::Wry> {
     deps: RequestEndDeps<'a, R>,
     trace_id: &'a str,
     cli_key: &'a str,
@@ -162,10 +162,11 @@ pub(super) struct RequestEndArgs<'a, R: tauri::Runtime = tauri::Wry> {
     usage_metrics: Option<crate::usage::UsageMetrics>,
     log_usage_metrics: Option<crate::usage::UsageMetrics>,
     usage: Option<crate::usage::UsageExtract>,
+    error_details_json: Option<String>,
 }
 
 impl<'a, R: tauri::Runtime> RequestEndArgs<'a, R> {
-    pub(super) fn from_context(context: RequestEndContextArgs<'a, R>) -> Self {
+    pub(in crate::gateway) fn from_context(context: RequestEndContextArgs<'a, R>) -> Self {
         Self {
             deps: context.deps,
             trace_id: context.trace_id,
@@ -191,10 +192,27 @@ impl<'a, R: tauri::Runtime> RequestEndArgs<'a, R> {
             usage_metrics: None,
             log_usage_metrics: None,
             usage: None,
+            error_details_json: None,
         }
     }
 
-    pub(super) fn with_completion(mut self, completion: RequestCompletion) -> Self {
+    pub(in crate::gateway) fn with_request_rejection(
+        mut self,
+        reason_code: &str,
+        reason: &str,
+    ) -> Self {
+        self.error_details_json = serde_json::to_string(&serde_json::json!({
+            "gateway_error_code":self.error_code,
+            "error_code":self.error_code,
+            "error_category":self.error_category,
+            "reason_code":truncate_text_ref(reason_code, REQUEST_END_LOG_SHORT_TEXT_MAX_CHARS),
+            "reason":truncate_text_ref(reason, REQUEST_END_LOG_REASON_MAX_CHARS),
+        }))
+        .ok();
+        self
+    }
+
+    pub(in crate::gateway) fn with_completion(mut self, completion: RequestCompletion) -> Self {
         self.status = completion.status;
         self.error_category = completion.error_category;
         self.error_code = completion.error_code;
@@ -753,7 +771,7 @@ impl RequestLogEnqueueArgs {
 fn prepare_request_end<R: tauri::Runtime>(
     args: RequestEndArgs<'_, R>,
 ) -> PreparedRequestEnd<'_, R> {
-    let (log_args, attempts) = RequestLogEnqueueArgs::from_proxy_request_end_parts(
+    let (mut log_args, attempts) = RequestLogEnqueueArgs::from_proxy_request_end_parts(
         args.trace_id,
         args.cli_key,
         args.client_identity,
@@ -774,6 +792,10 @@ fn prepare_request_end<R: tauri::Runtime>(
         args.log_usage_metrics,
         args.usage,
     );
+
+    if let Some(details) = args.error_details_json {
+        log_args.error_details_json = Some(details);
+    }
 
     PreparedRequestEnd {
         deps: args.deps,
@@ -796,7 +818,7 @@ fn active_request_finish_reason(
     }
 }
 
-pub(super) async fn emit_request_event_and_enqueue_request_log<R: tauri::Runtime>(
+pub(in crate::gateway) async fn emit_request_event_and_enqueue_request_log<R: tauri::Runtime>(
     args: RequestEndArgs<'_, R>,
 ) {
     // Disk log: request ended with error (failure path only).

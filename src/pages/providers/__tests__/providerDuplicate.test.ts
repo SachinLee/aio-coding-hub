@@ -27,6 +27,8 @@ function createProvider(overrides: Record<string, unknown> = {}) {
     created_at: 1,
     updated_at: 1,
     auth_mode: "api_key",
+    oauth_min_remaining_percent: null,
+    oauth_use_credits: false,
     oauth_provider_type: null,
     oauth_email: null,
     oauth_expires_at: null,
@@ -94,6 +96,19 @@ describe("pages/providers/providerDuplicate", () => {
     expect(
       buildDuplicatedProviderInitialValues(createProvider(), [], null).supports_websockets
     ).toBe(false);
+  });
+
+  it("retains explicit OAuth quota policy in duplicate initial values", () => {
+    const provider = createProvider({
+      cli_key: "codex",
+      auth_mode: "oauth",
+      oauth_min_remaining_percent: 12.5,
+      oauth_use_credits: true,
+    });
+    expect(buildDuplicatedProviderInitialValues(provider, [], null)).toMatchObject({
+      oauth_min_remaining_percent: 12.5,
+      oauth_use_credits: true,
+    });
   });
 
   it("clears api key for bridge or oauth providers and falls back optional values safely", () => {

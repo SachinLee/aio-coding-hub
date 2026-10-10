@@ -24,7 +24,8 @@ pub(super) fn skip_with_reason(
             error_category: reason.error_category,
             error_code: reason.error_code,
             reason: reason.reason,
-            reason_code: None,
+            reason_code: (reason.error_code == GatewayErrorCode::ProviderRateLimited.as_str())
+                .then_some(dc::REASON_RATE_LIMITED),
             attempt_started_ms,
             circuit: None,
         },
@@ -38,7 +39,7 @@ pub(super) struct ProviderIdentity<'a> {
     pub(super) provider_base_url_display: &'a String,
 }
 
-pub(super) fn run_gates<R: tauri::Runtime>(
+pub(super) async fn run_gates<R: tauri::Runtime>(
     ctx: CommonCtx<'_, R>,
     input: &RequestContext<R>,
     provider: &crate::providers::ProviderForGateway,
@@ -89,7 +90,9 @@ pub(super) fn run_gates<R: tauri::Runtime>(
         provider,
         earliest_available_unix: &mut counters.earliest_available_unix,
         skipped_limits: &mut counters.skipped_limits,
-    }) {
+    })
+    .await
+    {
         push_skipped_provider_attempt(
             attempts,
             SkippedProviderAttempt {

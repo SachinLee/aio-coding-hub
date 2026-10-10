@@ -1895,3 +1895,64 @@ fn custom_headers_ensure_old_and_new_schemas_is_idempotent() {
     assert!(row.0.contains("x-tenant"));
     assert!(row.1);
 }
+
+#[test]
+fn migrate_v39_to_v40_preserves_legacy_quota_and_defaults_policy() {
+    let mut conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(
+        r#"
+CREATE TABLE providers (id INTEGER PRIMARY KEY);
+INSERT INTO providers VALUES (1);
+CREATE TABLE provider_oauth_limit_snapshots (
+    provider_id INTEGER PRIMARY KEY,
+    limit_5h_text TEXT,
+    reset_credit_available_count INTEGER
+);
+INSERT INTO provider_oauth_limit_snapshots VALUES (1, '0%', 4);
+PRAGMA user_version = 39;
+"#,
+    )
+    .unwrap();
+    v39_to_v40::migrate_v39_to_v40(&mut conn).unwrap();
+    assert_eq!(read_user_version(&conn).unwrap(), 40);
+    let policy: (Option<f64>, bool) = conn
+        .query_row(
+            "SELECT oauth_min_remaining_percent, oauth_use_credits FROM providers WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(policy, (None, false));
+    let snapshot: (String, i64, Option<f64>, Option<f64>, Option<String>, bool) = conn.query_row(
+        "SELECT limit_5h_text, reset_credit_available_count, limit_5h_remaining_percent, limit_weekly_remaining_percent, credits_json, usage_limit_reached FROM provider_oauth_limit_snapshots WHERE provider_id = 1",
+        [], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+    ).unwrap();
+    assert_eq!(snapshot, ("0%".into(), 4, None, None, None, false));
+    assert_eq!(
+        conn.query_row(
+            "SELECT revision FROM provider_oauth_limit_snapshots",
+            [],
+            |row| row.get::<_, i64>(0)
+        )
+        .unwrap(),
+        0
+    );
+    conn.execute(
+        "UPDATE providers SET oauth_min_remaining_percent = 5.25, oauth_use_credits = 1",
+        [],
+    )
+    .unwrap();
+    v39_to_v40::ensure_oauth_quota_policy(&conn).unwrap();
+    assert_eq!(
+        conn.query_row(
+            "SELECT oauth_min_remaining_percent FROM providers",
+            [],
+            |row| row.get::<_, f64>(0)
+        )
+        .unwrap(),
+        5.25
+    );
+    assert!(conn
+        .execute("UPDATE providers SET oauth_min_remaining_percent = 101", [])
+        .is_err());
+}

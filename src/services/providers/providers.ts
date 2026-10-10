@@ -112,6 +112,8 @@ type ProviderUpsertFieldMap = {
   baseUrls: "baseUrls";
   baseUrlMode: "baseUrlMode";
   authMode: "authMode";
+  oauthMinRemainingPercent: "oauthMinRemainingPercent";
+  oauthUseCredits: "oauthUseCredits";
   apiKey: "apiKey";
   enabled: "enabled";
   costMultiplier: "costMultiplier";
@@ -205,6 +207,8 @@ function toProviderUpsertPayload(input: ProviderUpsertInput): ProviderUpsertTran
     baseUrls: input.baseUrls,
     baseUrlMode: input.baseUrlMode,
     authMode: input.authMode ?? null,
+    oauthMinRemainingPercent: input.oauthMinRemainingPercent ?? null,
+    oauthUseCredits: input.oauthUseCredits ?? false,
     apiKey: input.apiKey ?? null,
     enabled: input.enabled,
     costMultiplier: input.costMultiplier,
@@ -566,36 +570,8 @@ export async function providerOAuthStatus(providerId: number): Promise<ProviderO
 
 export type OAuthLimitsResult = ProviderOAuthLimitsResult;
 
-function parseLeadingOAuthQuotaNumber(text: string): [number, string] | null {
-  const match = text.match(/^(\d+(?:\.\d+)?)(.*)$/);
-  if (!match) return null;
-  const value = Number.parseFloat(match[1].replace(/,/g, ""));
-  if (!Number.isFinite(value)) return null;
-  return [value, match[2] ?? ""];
-}
-
-export function isExhaustedOAuthQuotaText(value: string | null | undefined): boolean {
-  const text = value?.trim();
-  if (!text) return false;
-
-  const parsed = parseLeadingOAuthQuotaNumber(text.replace(/,/g, ""));
-  if (!parsed) return false;
-
-  const [remaining, restRaw] = parsed;
-  if (Math.abs(remaining) > Number.EPSILON) return false;
-
-  const rest = restRaw.trimStart();
-  if (!rest) return true;
-
-  const first = rest[0];
-  return first === "%" || first === "/" || /\p{L}/u.test(first);
-}
-
 export function hasInsufficientOAuthQuota(limits: OAuthLimitsResult | null): boolean {
-  return (
-    isExhaustedOAuthQuotaText(limits?.limit_5h_text) ||
-    isExhaustedOAuthQuotaText(limits?.limit_weekly_text)
-  );
+  return limits?.routing_limited === true;
 }
 
 export async function providerOAuthFetchLimits(

@@ -786,6 +786,8 @@ mod tests {
                 limit_weekly_usd: None,
                 limit_monthly_usd: None,
                 limit_total_usd: None,
+                oauth_min_remaining_percent: None,
+                oauth_use_credits: false,
                 tags: None,
                 note: None,
                 source_provider_id: None,
@@ -872,6 +874,8 @@ mod tests {
                 limit_weekly_usd: None,
                 limit_monthly_usd: None,
                 limit_total_usd: None,
+                oauth_min_remaining_percent: None,
+                oauth_use_credits: false,
                 tags: None,
                 note: None,
                 source_provider_id: None,
@@ -920,6 +924,8 @@ mod tests {
                 limit_weekly_usd: None,
                 limit_monthly_usd: None,
                 limit_total_usd: None,
+                oauth_min_remaining_percent: None,
+                oauth_use_credits: false,
                 tags: None,
                 note: None,
                 source_provider_id: Some(source_provider_id),
@@ -1814,70 +1820,31 @@ mod tests {
         let payload: Value = serde_json::from_slice(&body).expect("JSON error response");
         assert_eq!(
             payload.get("error_code").and_then(Value::as_str),
-            Some(crate::gateway::proxy::GatewayErrorCode::NoEnabledProvider.as_str())
+            Some(crate::gateway::proxy::GatewayErrorCode::AllProvidersUnavailable.as_str())
         );
 
         let log = recv_terminal_request_log(&mut log_rx).await;
         assert_eq!(log.status, Some(503));
         assert_eq!(
             log.error_code.as_deref(),
-            Some(crate::gateway::proxy::GatewayErrorCode::NoEnabledProvider.as_str())
+            Some(crate::gateway::proxy::GatewayErrorCode::AllProvidersUnavailable.as_str())
         );
-        let special_settings: Value = serde_json::from_str(
-            log.special_settings_json
-                .as_deref()
-                .expect("special settings JSON"),
-        )
-        .expect("valid special settings JSON");
-        let settings = special_settings.as_array().expect("special settings array");
-        let circuit_denied = settings
-            .iter()
-            .find(|item| {
-                item.get("type").and_then(Value::as_str)
-                    == Some("session_bound_provider_circuit_denied")
-            })
-            .expect("session-bound circuit diagnostic");
+        assert!(payload["message"]
+            .as_str()
+            .unwrap()
+            .contains("circuit breakers"));
+        assert_eq!(payload["error"]["code"], "GW_ALL_PROVIDERS_UNAVAILABLE");
+        let attempts: Value = serde_json::from_str(&log.attempts_json).unwrap();
+        assert_eq!(attempts.as_array().unwrap().len(), 1);
+        assert_eq!(attempts[0]["provider_id"], provider_id);
+        assert_eq!(attempts[0]["outcome"], "skipped");
+        assert_eq!(attempts[0]["upstream_sent"], false);
+        assert_eq!(attempts[0]["circuit_state_before"], "OPEN");
         assert_eq!(
-            circuit_denied
-                .pointer("/denied/providerId")
-                .and_then(Value::as_i64),
-            Some(provider_id)
+            attempts[0]["circuit_trigger_error_code"],
+            "GW_UPSTREAM_TIMEOUT"
         );
-        assert_eq!(
-            circuit_denied
-                .pointer("/denied/state")
-                .and_then(Value::as_str),
-            Some("OPEN")
-        );
-        assert_eq!(
-            circuit_denied
-                .pointer("/denied/lastTriggerErrorCode")
-                .and_then(Value::as_str),
-            Some(crate::gateway::proxy::GatewayErrorCode::UpstreamTimeout.as_str())
-        );
-
-        let selection = settings
-            .iter()
-            .find(|item| {
-                item.get("type").and_then(Value::as_str) == Some("provider_selection_diagnostic")
-            })
-            .expect("provider selection diagnostic");
-        assert_eq!(
-            selection.get("clearedReason").and_then(Value::as_str),
-            Some("session_bound_provider_circuit_open")
-        );
-        assert_eq!(
-            selection
-                .get("sessionBoundCircuitDenied")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            selection
-                .get("deniedBoundProviderId")
-                .and_then(Value::as_i64),
-            Some(provider_id)
-        );
+        assert!(payload["retry_after_seconds"].as_u64().unwrap() > 0);
     }
 
     fn gateway_state_with_plugin_pipeline(
@@ -3898,6 +3865,8 @@ module.exports.activate = function activate(api) {
                 limit_weekly_usd: None,
                 limit_monthly_usd: None,
                 limit_total_usd: None,
+                oauth_min_remaining_percent: None,
+                oauth_use_credits: false,
                 tags: None,
                 note: None,
                 source_provider_id: None,
@@ -5330,6 +5299,382 @@ module.exports.activate = function activate(api) {
 
         quota_task.abort();
         success_task.abort();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn oauth_quota_policy_applies_to_direct_and_cx2cc_routes() {
+        use crate::domain::provider_oauth_limits::{
+            save_snapshot, OAuthLimitSnapshotInput, ProviderOAuthCreditBalance,
+        };
+
+        let _env_lock = crate::test_support::test_env_lock();
+        for bridged in [false, true] {
+            for (remaining, use_credits, hard_limit, allow_oauth) in [
+                (5.01, false, false, true),
+                (5.0, false, false, false),
+                (4.99, false, false, false),
+                (0.0, true, false, true),
+                (0.0, true, true, false),
+            ] {
+                let home = tempfile::tempdir().expect("home dir");
+                let _env = isolate_app_env(home.path());
+                let app = tauri::test::mock_app();
+                let app_handle = app.handle().clone();
+                let mut cfg = settings::AppSettings::default();
+                cfg.failover_max_attempts_per_provider = 1;
+                cfg.failover_max_providers_to_try = 2;
+                settings::write(&app_handle, &cfg).expect("settings");
+                let cli_key = if bridged { "claude" } else { "codex" };
+                crate::cli_proxy::set_enabled(&app_handle, cli_key, true, "http://127.0.0.1:37123")
+                    .expect("enable proxy");
+                let db = db::init_for_tests(&home.path().join("quota-policy.sqlite")).unwrap();
+                let oauth_id = insert_codex_oauth_provider_with_priority(&db, "OAuth", 0);
+                let now = crate::shared::time::now_unix_seconds();
+                providers::update_oauth_tokens(
+                    &db,
+                    oauth_id,
+                    "oauth",
+                    "codex_oauth",
+                    "quota-oauth-token",
+                    None,
+                    None,
+                    "https://example.invalid/token",
+                    "client",
+                    None,
+                    Some(now + 3600),
+                    None,
+                )
+                .unwrap();
+                db.open_connection().unwrap().execute(
+                    "UPDATE providers SET oauth_min_remaining_percent = 5, oauth_use_credits = ?1 WHERE id = ?2",
+                    rusqlite::params![use_credits, oauth_id],
+                ).unwrap();
+                let credits = ProviderOAuthCreditBalance {
+                    has_credits: true,
+                    unlimited: false,
+                    balance: Some("62500.50".into()),
+                };
+                save_snapshot(
+                    &db,
+                    OAuthLimitSnapshotInput {
+                        provider_id: oauth_id,
+                        limit_short_label: Some("5h"),
+                        limit_5h_text: Some("5%"),
+                        limit_weekly_text: Some("90%"),
+                        limit_5h_remaining_percent: Some(remaining),
+                        limit_weekly_remaining_percent: Some(90.0),
+                        limit_5h_reset_at: Some(now + 3600),
+                        limit_weekly_reset_at: Some(now + 86400),
+                        reset_credit_available_count: Some(2),
+                        credits: Some(&credits),
+                        usage_limit_reached: hard_limit,
+                    },
+                )
+                .unwrap();
+                if bridged {
+                    insert_cx2cc_bridge_provider(&db, oauth_id, 0);
+                }
+                insert_provider_with_priority(
+                    &db,
+                    cli_key,
+                    "Fallback",
+                    "https://example.invalid".into(),
+                    1,
+                );
+
+                let captured = Arc::new(Mutex::new(Vec::new()));
+                let executor = InMemoryGatewayPluginExecutor::new().with_request_handler(
+                    "test.before-send",
+                    {
+                        let captured = Arc::clone(&captured);
+                        move |ctx| {
+                            captured.lock().unwrap().push(ctx.request.headers);
+                            let mut result = GatewayHookResult::continue_unchanged();
+                            result.action =
+                                crate::gateway::plugins::context::GatewayHookAction::Block;
+                            result.reason =
+                                Some("Inspect selected credentials without sending".into());
+                            result
+                        }
+                    },
+                );
+                let mut plugin = before_send_header_plugin();
+                plugin.granted_permissions = vec!["request.header.readSensitive".into()];
+                let pipeline = GatewayPluginPipeline::for_tests_shared(
+                    vec![plugin],
+                    Arc::new(executor),
+                    GatewayPluginPipelineConfig::default(),
+                );
+                let (log_tx, _log_rx) = tokio::sync::mpsc::channel(4);
+                let state =
+                    gateway_state_with_plugin_pipeline(app_handle, db.clone(), log_tx, pipeline);
+                let circuit = state.circuit.clone();
+                let (path, body) = if bridged {
+                    (
+                        "/claude/v1/messages",
+                        r#"{"model":"claude-3-5-sonnet","max_tokens":128,"messages":[{"role":"user","content":"hello"}]}"#,
+                    )
+                } else {
+                    ("/v1/responses", r#"{"model":"gpt-test","input":"hello"}"#)
+                };
+                let response = build_router(state)
+                    .oneshot(
+                        Request::builder()
+                            .method(Method::POST)
+                            .uri(path)
+                            .header(header::CONTENT_TYPE, "application/json")
+                            .body(Body::from(body))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), StatusCode::FORBIDDEN);
+                let captured = captured.lock().unwrap();
+                assert_eq!(captured.len(), 1);
+                let bearer = captured[0]
+                    .as_ref()
+                    .unwrap()
+                    .get("authorization")
+                    .and_then(Value::as_str);
+                assert_eq!(bearer == Some("Bearer quota-oauth-token"), allow_oauth,
+                    "bridged={bridged} remaining={remaining} credits={use_credits} hard={hard_limit}");
+                let enabled: bool = db
+                    .open_connection()
+                    .unwrap()
+                    .query_row(
+                        "SELECT enabled FROM providers WHERE id = ?1",
+                        [oauth_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                assert!(enabled);
+                assert_eq!(circuit.snapshot(oauth_id, 0).failure_count, 0);
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn oauth_quota_unavailable_cache_expires_before_quota_refresh() {
+        let _env_lock = crate::test_support::test_env_lock();
+        let test_home = tempfile::tempdir().unwrap();
+        let _env = isolate_app_env(test_home.path());
+        let app = tauri::test::mock_app();
+        let app_handle = app.handle().clone();
+        settings::write(&app_handle, &settings::AppSettings::default()).unwrap();
+        crate::cli_proxy::set_enabled(&app_handle, "codex", true, "http://127.0.0.1:37123")
+            .unwrap();
+        let db_dir = tempfile::tempdir().unwrap();
+        let db = db::init_for_tests(&db_dir.path().join("quota-cache.sqlite")).unwrap();
+        let provider_id = insert_codex_oauth_provider_with_priority(&db, "OAuth", 0);
+        db.open_connection()
+            .unwrap()
+            .execute(
+                "UPDATE providers SET oauth_min_remaining_percent = 5 WHERE id = ?1",
+                [provider_id],
+            )
+            .unwrap();
+        let now = crate::shared::time::now_unix_seconds();
+        crate::domain::provider_oauth_limits::save_exhausted_snapshot(
+            &db,
+            provider_id,
+            Some(now + 7 * 86_400),
+        )
+        .unwrap();
+        let (log_tx, _log_rx) = tokio::sync::mpsc::channel(4);
+        let router = build_router(gateway_state_with_plugin_pipeline(
+            app_handle,
+            db,
+            log_tx,
+            GatewayPluginPipeline::empty_shared(),
+        ));
+        for _ in 0..2 {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(Method::POST)
+                        .uri("/v1/responses")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(r#"{"model":"gpt-test","input":"hello"}"#))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+            let retry_after: i64 = response.headers()[header::RETRY_AFTER]
+                .to_str()
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert!(
+                (1..=crate::domain::provider_oauth_limits::SNAPSHOT_FRESHNESS_SECS)
+                    .contains(&retry_after)
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn oauth_quota_retry_deadline_survives_query_failure_and_cx2cc() {
+        use crate::domain::provider_oauth_limits::{
+            save_exhausted_snapshot, SNAPSHOT_FRESHNESS_SECS,
+        };
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let _env_lock = crate::test_support::test_env_lock();
+        for bridged in [false, true] {
+            for query_fails in [false, true] {
+                let test_home = tempfile::tempdir().unwrap();
+                let _env = isolate_app_env(test_home.path());
+                let app = tauri::test::mock_app();
+                let app_handle = app.handle().clone();
+                let mut cfg = settings::AppSettings::default();
+                cfg.failover_max_providers_to_try = 2;
+                settings::write(&app_handle, &cfg).unwrap();
+                let cli_key = if bridged { "claude" } else { "codex" };
+                crate::cli_proxy::set_enabled(&app_handle, cli_key, true, "http://127.0.0.1:37123")
+                    .unwrap();
+                let db = db::init_for_tests(&test_home.path().join("quota-retry.sqlite")).unwrap();
+                let source_id = insert_codex_oauth_provider_with_priority(&db, "OAuth", 0);
+                db.open_connection()
+                    .unwrap()
+                    .execute(
+                        "UPDATE providers SET oauth_min_remaining_percent = 5 WHERE id = ?1",
+                        [source_id],
+                    )
+                    .unwrap();
+                let now = crate::shared::time::now_unix_seconds();
+                if !query_fails {
+                    providers::update_oauth_tokens(
+                        &db,
+                        source_id,
+                        "oauth",
+                        "codex_oauth",
+                        "quota-source-token",
+                        None,
+                        None,
+                        "https://example.invalid/token",
+                        "client",
+                        None,
+                        Some(now + 3600),
+                        None,
+                    )
+                    .unwrap();
+                    save_exhausted_snapshot(&db, source_id, Some(now + 7 * 86_400)).unwrap();
+                }
+                // With no snapshot or token, the quota lookup fails before any network IO.
+                let routed_id = if bridged {
+                    insert_cx2cc_bridge_provider(&db, source_id, 0)
+                } else {
+                    source_id
+                };
+                let fallback_id = insert_provider_with_priority(
+                    &db,
+                    cli_key,
+                    "One hour cooldown",
+                    "https://example.invalid".into(),
+                    1,
+                );
+                providers::update_oauth_tokens(
+                    &db,
+                    fallback_id,
+                    "oauth",
+                    if bridged {
+                        "claude_oauth"
+                    } else {
+                        "codex_oauth"
+                    },
+                    "quota-fallback-token",
+                    None,
+                    None,
+                    "https://example.invalid/token",
+                    "client",
+                    None,
+                    Some(now + 3600),
+                    None,
+                )
+                .unwrap();
+                save_exhausted_snapshot(&db, fallback_id, Some(now + 3600)).unwrap();
+
+                let send_count = Arc::new(AtomicUsize::new(0));
+                let executor = InMemoryGatewayPluginExecutor::new().with_request_handler(
+                    "test.before-send",
+                    {
+                        let send_count = Arc::clone(&send_count);
+                        move |_| {
+                            send_count.fetch_add(1, Ordering::SeqCst);
+                            let mut result = GatewayHookResult::continue_unchanged();
+                            result.action =
+                                crate::gateway::plugins::context::GatewayHookAction::Block;
+                            result.reason = Some("Quota gate must prevent upstream sends".into());
+                            result
+                        }
+                    },
+                );
+                let pipeline = GatewayPluginPipeline::for_tests_shared(
+                    vec![before_send_header_plugin()],
+                    Arc::new(executor),
+                    GatewayPluginPipelineConfig::default(),
+                );
+                let (log_tx, mut log_rx) = tokio::sync::mpsc::channel(4);
+                let state = gateway_state_with_plugin_pipeline(app_handle, db, log_tx, pipeline);
+                let circuit = state.circuit.clone();
+                let router = build_router(state);
+                let (path, body) = if bridged {
+                    (
+                        "/claude/v1/messages",
+                        r#"{"model":"claude-3-5-sonnet","max_tokens":128,"messages":[{"role":"user","content":"hello"}]}"#,
+                    )
+                } else {
+                    ("/v1/responses", r#"{"model":"gpt-test","input":"hello"}"#)
+                };
+                for _ in 0..2 {
+                    let response = router
+                        .clone()
+                        .oneshot(
+                            Request::builder()
+                                .method(Method::POST)
+                                .uri(path)
+                                .header(header::CONTENT_TYPE, "application/json")
+                                .body(Body::from(body))
+                                .unwrap(),
+                        )
+                        .await
+                        .unwrap();
+                    assert_eq!(
+                        response.status(),
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "bridged={bridged} query_fails={query_fails}"
+                    );
+                    let retry_after: i64 = response.headers()[header::RETRY_AFTER]
+                        .to_str()
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    assert!(
+                        (1..=SNAPSHOT_FRESHNESS_SECS).contains(&retry_after),
+                        "another provider hid the quota recheck: {retry_after}"
+                    );
+                }
+                assert_eq!(send_count.load(Ordering::SeqCst), 0);
+                let log = recv_terminal_request_log(&mut log_rx).await;
+                assert_eq!(log.status, Some(503));
+                assert_eq!(
+                    log.error_code.as_deref(),
+                    Some(crate::gateway::proxy::GatewayErrorCode::AllProvidersUnavailable.as_str())
+                );
+                let attempts: Value = serde_json::from_str(&log.attempts_json).unwrap();
+                let attempts = attempts.as_array().unwrap();
+                assert_eq!(attempts.len(), 2);
+                assert_eq!(attempts[0]["provider_id"], routed_id);
+                for attempt in attempts {
+                    assert_eq!(attempt["outcome"], "skipped");
+                    assert_eq!(attempt["reason_code"], "rate_limited");
+                    assert_eq!(attempt["upstream_sent"], false);
+                }
+                assert_eq!(circuit.snapshot(routed_id, now).failure_count, 0);
+                assert_eq!(circuit.snapshot(source_id, now).failure_count, 0);
+            }
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]

@@ -398,6 +398,7 @@ where
         // Propagate fake 200 detection from tracker to finalize context.
         if self.tracker.fake_200_detected() {
             self.ctx.fake_200_detected = true;
+            self.ctx.fake_200_quota_exhausted = self.tracker.fake_200_quota_exhausted();
             if let Some(reason) = self.tracker.fake_200_reason() {
                 response_fixer::push_special_setting(
                     &self.ctx.special_settings,
@@ -1019,7 +1020,7 @@ mod tests {
             provider_id: 1,
             provider_name: "test-provider".to_string(),
             base_url: "https://upstream.example".to_string(),
-            auth_mode: "api_key".to_string(),
+            oauth_quota_identity: None,
             fake_200_detected: false,
             fake_200_quota_exhausted: false,
             activity: Arc::new(Mutex::new(StreamActivityTracker::new(
@@ -1537,5 +1538,141 @@ mod tests {
             .expect("request log should be enqueued")
             .expect("request log channel should stay open");
         assert_eq!(log.error_code, None);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cx2cc_usage_limit_sse_marks_only_the_oauth_source_exhausted() {
+        use crate::domain::provider_oauth_limits::read_snapshot;
+        use crate::gateway::oauth::limits::quota_source_provider_id;
+        use crate::gateway::proxy::protocol_bridge::stream::BridgeStream;
+        use futures_util::StreamExt;
+        for (source_auth_mode, reauthorize, error_code) in [
+            ("oauth", false, "usage_limit_reached"),
+            ("api_key", false, "usage_limit_reached"),
+            ("oauth", true, "usage_limit_reached"),
+            ("oauth", false, "rate_limit_exceeded"),
+        ] {
+            let app = tauri::test::mock_app();
+            let dir = tempfile::tempdir().unwrap();
+            let db = db::init_for_tests(&dir.path().join("bridge-quota-stream.db")).unwrap();
+            let conn = db.open_connection().unwrap();
+            conn.execute_batch("INSERT INTO providers(id,cli_key,name,base_url,api_key_plaintext,created_at,updated_at,auth_mode) VALUES
+                (1,'claude','bridge','https://bridge.test','',1,1,'api_key'),
+                (2,'codex','source','https://source.test','',1,1,'oauth');").unwrap();
+            conn.execute(
+                "UPDATE providers SET auth_mode=?1, oauth_access_token='source-token' WHERE id=2",
+                [source_auth_mode],
+            )
+            .unwrap();
+            drop(conn);
+            let (log_tx, _log_rx) = tokio::sync::mpsc::channel(4);
+            let mut ctx = test_stream_finalize_ctx(
+                app.handle().clone(),
+                db.clone(),
+                log_tx,
+                Arc::new(ActiveRequestRegistry::default()),
+            );
+            ctx.cli_key = "claude".to_string();
+            ctx.path = "/v1/messages".to_string();
+            ctx.observe = false;
+            ctx.oauth_quota_identity =
+                quota_source_provider_id(1, "api_key", true, Some((2, source_auth_mode)))
+                    .map(|id| (id, "source-token".to_string()));
+            // The stream retains account A's request identity while account B
+            // logs in and refreshes its quota before A's error arrives.
+            let expected_credits =
+                crate::domain::provider_oauth_limits::ProviderOAuthCreditBalance {
+                    has_credits: true,
+                    unlimited: false,
+                    balance: Some("50".into()),
+                };
+            if reauthorize {
+                db.open_connection().unwrap().execute("UPDATE providers SET oauth_access_token='new-account-token', oauth_use_credits=1 WHERE id=2", []).unwrap();
+                crate::domain::provider_oauth_limits::save_snapshot(
+                    &db,
+                    crate::domain::provider_oauth_limits::OAuthLimitSnapshotInput {
+                        provider_id: 2,
+                        limit_short_label: Some("5h"),
+                        limit_5h_text: Some("80%"),
+                        limit_weekly_text: None,
+                        limit_5h_reset_at: None,
+                        limit_weekly_reset_at: None,
+                        reset_credit_available_count: None,
+                        limit_5h_remaining_percent: Some(80.0),
+                        limit_weekly_remaining_percent: None,
+                        credits: Some(&expected_credits),
+                        usage_limit_reached: false,
+                    },
+                )
+                .unwrap();
+            }
+            let frame = format!(
+                "event: response.failed\ndata: {}\n\n",
+                serde_json::json!({
+                    "type": "response.failed", "response": {"status": "failed", "error": {
+                        "code": error_code, "message": if error_code == "usage_limit_reached" { "You've hit your usage limit" } else { "Too many requests. Try again in 20 seconds." }
+                    }}
+                })
+            );
+            let upstream =
+                futures_util::stream::iter(vec![Ok::<_, UpstreamStreamError>(Bytes::from(frame))]);
+            let bridge = BridgeStream::for_cx2cc(
+                upstream,
+                true,
+                None,
+                crate::gateway::proxy::cx2cc::settings::Cx2ccSettings::default(),
+            );
+            let translated = Arc::new(Mutex::new(String::new()));
+            let captured = translated.clone();
+            let bridge = bridge.inspect(move |frame| {
+                if let Ok(frame) = frame {
+                    captured
+                        .lock()
+                        .unwrap()
+                        .push_str(std::str::from_utf8(frame).unwrap());
+                }
+            });
+            let tee = super::UsageSseTeeStream::new(bridge, ctx, None, None);
+            // The tee's existing HTTP error policy finalizes and ends the body.
+            // Capture the bridge/tee boundary to verify the error classification.
+            let _body = axum::body::to_bytes(axum::body::Body::from_stream(tee), 4096)
+                .await
+                .unwrap();
+            let output = translated.lock().unwrap();
+            assert!(output.contains("event: error"));
+            assert!(output.contains(error_code));
+            let conn = db.open_connection().unwrap();
+            let source_snapshot = read_snapshot(&conn, 2).unwrap();
+            assert_eq!(
+                source_snapshot
+                    .as_ref()
+                    .is_some_and(|snapshot| snapshot.usage_limit_reached),
+                source_auth_mode == "oauth" && !reauthorize && error_code == "usage_limit_reached"
+            );
+            if reauthorize {
+                let retained = source_snapshot.unwrap();
+                assert_eq!(retained.credits, Some(expected_credits));
+                assert_eq!(retained.revision, 1);
+                assert_eq!(
+                    crate::domain::provider_oauth_limits::gate_snapshot(
+                        &conn,
+                        2,
+                        crate::shared::time::now_unix_seconds()
+                    )
+                    .unwrap(),
+                    crate::domain::provider_oauth_limits::OAuthLimitGate::Allow
+                );
+            } else if error_code == "rate_limit_exceeded" {
+                assert!(source_snapshot.is_none());
+            }
+            assert!(read_snapshot(&conn, 1).unwrap().is_none());
+            assert_eq!(
+                conn.query_row("SELECT auth_mode FROM providers WHERE id=1", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap(),
+                "api_key"
+            );
+        }
     }
 }

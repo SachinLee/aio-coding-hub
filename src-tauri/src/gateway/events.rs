@@ -790,9 +790,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn request_event_payload_matches_shared_fixture() {
-        let event = GatewayRequestEvent {
+    fn fixture_request_event() -> GatewayRequestEvent {
+        GatewayRequestEvent {
             trace_id: "trace-fixture-001".to_string(),
             cli_key: "claude".to_string(),
             session_id: Some("sess-fixture-001".to_string()),
@@ -848,7 +847,12 @@ mod tests {
             model_redirect: None,
             reasoning_effort: Some("high".to_string()),
             terminal_signal: None,
-        };
+        }
+    }
+
+    #[test]
+    fn request_event_payload_matches_shared_fixture() {
+        let event = fixture_request_event();
 
         assert_matches_fixture(
             &event,
@@ -861,6 +865,61 @@ mod tests {
         assert_eq!(
             serde_json::to_value(incomplete).unwrap()["terminal_signal"],
             "incomplete"
+        );
+    }
+
+    #[test]
+    fn unavailable_request_event_payload_matches_shared_fixture() {
+        let mut event = fixture_request_event();
+        event.trace_id = "trace-unavailable-001".into();
+        event.cli_key = "codex".into();
+        event.session_id = Some("sess-unavailable".into());
+        event.path = "/v1/responses".into();
+        event.query = None;
+        event.requested_model = Some("gpt-test".into());
+        event.status = Some(503);
+        event.error_code = Some("GW_ALL_PROVIDERS_UNAVAILABLE");
+        event.duration_ms = 12;
+        event.ttfb_ms = None;
+        event.claude_model_mapping = None;
+        event.reasoning_effort = None;
+        event.input_tokens = None;
+        event.output_tokens = None;
+        event.total_tokens = None;
+        event.cache_read_input_tokens = None;
+        event.cache_creation_input_tokens = None;
+        event.cache_creation_5m_input_tokens = None;
+        event.cache_creation_1h_input_tokens = None;
+        event.effective_input_tokens = None;
+        let attempt = &mut event.attempts[0];
+        attempt.outcome = "skipped".into();
+        attempt.status = None;
+        attempt.error_category = Some("PROVIDER_ERROR");
+        attempt.error_code = Some("GW_PROVIDER_CIRCUIT_OPEN");
+        attempt.decision = Some("skip");
+        attempt.reason = Some("provider circuit is open".into());
+        attempt.reason_code = Some("circuit_open");
+        attempt.attempt_duration_ms = Some(0);
+        attempt.circuit_state_before = Some("OPEN");
+        attempt.circuit_state_after = Some("OPEN");
+        attempt.circuit_failure_count = Some(5);
+        attempt.circuit_recover_at_unix = Some(1_750_000_030);
+        attempt.circuit_trigger_error_code = Some("GW_UPSTREAM_TIMEOUT");
+        attempt.reasoning_effort = None;
+        attempt.upstream_sent = false;
+        let mut other = attempt.clone();
+        other.provider_id = 8;
+        other.provider_name = "Provider B".into();
+        other.base_url = "https://provider-b.example".into();
+        other.provider_index = Some(2);
+        other.circuit_recover_at_unix = Some(1_750_000_045);
+        other.circuit_trigger_error_code = Some("GW_UPSTREAM_4XX");
+        event.attempts.push(other);
+        assert_matches_fixture(
+            &event,
+            include_str!(
+                "../../../src/services/gateway/__fixtures__/gatewayEvents/request_unavailable.json"
+            ),
         );
     }
 

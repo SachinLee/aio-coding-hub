@@ -2,7 +2,7 @@ use super::provider_order;
 use crate::gateway::proxy::failover::should_reuse_provider;
 use crate::gateway::runtime::GatewayAppState;
 use crate::providers;
-use crate::{circuit_breaker, session_manager};
+use crate::session_manager;
 use std::collections::HashSet;
 
 pub(super) struct ProviderSelection {
@@ -212,15 +212,14 @@ pub(super) fn apply_session_reuse_provider_binding(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn resolve_session_bound_provider_id(
     session: &session_manager::SessionManager,
-    circuit: &circuit_breaker::CircuitBreaker,
     cli_key: &str,
     session_id: Option<&str>,
     created_at: i64,
     allow_session_reuse: bool,
     forced_provider_id: Option<i64>,
-    providers: &mut Vec<providers::ProviderForGateway>,
+    providers: &mut [providers::ProviderForGateway],
     bound_provider_order: Option<&[i64]>,
-    requested_model: Option<&str>,
+    _requested_model: Option<&str>,
 ) -> SessionBoundResult {
     let bound_provider_id =
         session_id.and_then(|sid| session.get_bound_provider(cli_key, sid, created_at));
@@ -232,18 +231,6 @@ pub(super) fn resolve_session_bound_provider_id(
                 // (e.g. sort_mode/provider membership changed). Clear the stale binding so it
                 // cannot bypass selection constraints.
                 session.clear_bound_provider(cli_key, session_id, created_at);
-            } else {
-                let check = match requested_model.filter(|m| !m.is_empty()) {
-                    Some(model) => circuit.should_allow_model(bound_provider_id, model, created_at),
-                    None => circuit.should_allow(bound_provider_id, created_at),
-                };
-                if !check.allow {
-                    providers.retain(|provider| provider.id != bound_provider_id);
-                    return SessionBoundResult::DeniedByCircuit {
-                        provider_id: bound_provider_id,
-                        snapshot: check.after,
-                    };
-                }
             }
         }
     }
@@ -261,21 +248,13 @@ pub(super) fn resolve_session_bound_provider_id(
 
 /// Outcome of resolving session-bound provider preference.
 ///
-/// This makes the reason a bound provider was (or was not) applied explicit,
-/// which is important for observability (especially single-provider + circuit open cases).
+/// Health admission belongs to the shared provider gate, after candidate selection.
 #[derive(Debug, Clone)]
 pub(super) enum SessionBoundResult {
     /// A provider id was selected/preferred for session reuse (the list may have been rotated).
     Preferred(i64),
     /// No session preference was applied for this request.
     NoPreference,
-    /// The session had a bound provider that was still in the candidate list,
-    /// but it was removed because the circuit breaker denied it (open or active cooldown).
-    /// The provider has already been filtered out of `providers`.
-    DeniedByCircuit {
-        provider_id: i64,
-        snapshot: crate::circuit_breaker::CircuitSnapshot,
-    },
 }
 
 pub(super) struct SessionRoutingDecision {

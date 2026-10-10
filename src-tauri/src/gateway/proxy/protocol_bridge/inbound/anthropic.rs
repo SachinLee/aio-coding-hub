@@ -519,6 +519,18 @@ fn render_chunk(chunk: &IRStreamChunk, ctx: &BridgeContext) -> Result<Vec<Bytes>
             vec![sse_frame("message_stop", json!({"type": "message_stop"}))]
         }
 
+        IRStreamChunk::Error { code, message } => {
+            let limited = crate::shared::upstream_quota::is_quota_exhausted_code(code)
+                || matches!(code.as_str(), "rate_limit_exceeded" | "rate_limit_error");
+            vec![sse_frame(
+                "error",
+                json!({"type":"error","error":{
+                    "type": if limited { "rate_limit_error" } else { "api_error" },
+                    "code": code, "message": message,
+                }}),
+            )]
+        }
+
         IRStreamChunk::Ping => {
             vec![sse_frame("ping", json!({"type": "ping"}))]
         }

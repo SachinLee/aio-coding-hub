@@ -206,6 +206,11 @@ where
                         for f in frames {
                             self.buffer.push_back(f);
                         }
+                        if translator.state.terminal_seen {
+                            self.line_buf.clear();
+                            self.terminated = true;
+                            return;
+                        }
                     }
                     Err(e) => {
                         tracing::warn!("bridge stream translation error: {e}");
@@ -525,5 +530,87 @@ mod tests {
             Pin::new(&mut stream).poll_next(&mut cx),
             Poll::Ready(None)
         ));
+    }
+
+    #[test]
+    fn bridge_preserves_quota_classification_for_usage_tracking() {
+        for (error, expected_code, exhausted) in [
+            (
+                serde_json::json!({"code":"usage_limit_reached","message":"Usage limit reached"}),
+                "usage_limit_reached",
+                true,
+            ),
+            (
+                serde_json::json!({"code":"rate_limit_exceeded","type":"usage_limit_reached","message":"The usage limit has been reached"}),
+                "quota_exhausted",
+                true,
+            ),
+            (
+                serde_json::json!({"message":"quota exhausted"}),
+                "quota_exhausted",
+                true,
+            ),
+            (
+                serde_json::json!({"type":"rate_limit_error","message":"quota exhausted"}),
+                "quota_exhausted",
+                true,
+            ),
+            (
+                serde_json::json!({"code":"rate_limit_exceeded","type":"rate_limit_error","message":"Token quota exceeded. Try again in 20 seconds."}),
+                "rate_limit_exceeded",
+                false,
+            ),
+            (
+                serde_json::json!({"code":"invalid_request_error","message":"Invalid request"}),
+                "invalid_request_error",
+                false,
+            ),
+        ] {
+            let raw = format!(
+                "event: response.failed\ndata: {}\n\n",
+                serde_json::json!({
+                    "type":"response.failed", "response":{"status":"failed","error":error}
+                })
+            );
+            let mut stream = BridgeStream::for_cx2cc(
+                MockStream::new(vec![Ok(Bytes::from(raw))]),
+                true,
+                None,
+                crate::gateway::proxy::cx2cc::settings::Cx2ccSettings::default(),
+            );
+            let mut tracker =
+                crate::usage::SseUsageTracker::new_for_request("claude", "/v1/messages");
+            let waker = std::task::Waker::noop();
+            let mut cx = Context::from_waker(waker);
+            let Poll::Ready(Some(Ok(frame))) = Pin::new(&mut stream).poll_next(&mut cx) else {
+                panic!("expected translated error for {error}");
+            };
+            tracker.ingest_chunk(&frame);
+            let (event, payload) = parse_sse_frame(std::str::from_utf8(&frame).unwrap()).unwrap();
+            assert_eq!(event, "error");
+            assert_eq!(payload["error"]["code"], expected_code);
+            assert_eq!(payload["error"]["message"], error["message"]);
+            assert!(tracker.fake_200_detected());
+            assert_eq!(tracker.fake_200_quota_exhausted(), exhausted, "{error}");
+        }
+    }
+
+    #[test]
+    fn bridge_ignores_late_error_after_successful_completion() {
+        let mut stream = BridgeStream::for_cx2cc(
+            MockStream::new(vec![Ok(Bytes::from_static(concat!(
+                "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n",
+                "event: response.failed\ndata: {\"response\":{\"error\":{\"code\":\"usage_limit_reached\"}}}\n\n",
+            ).as_bytes()))]), true, None, crate::gateway::proxy::cx2cc::settings::Cx2ccSettings::default(),
+        );
+        let waker = std::task::Waker::noop();
+        let mut cx = Context::from_waker(waker);
+        let mut output = String::new();
+        while let Poll::Ready(Some(Ok(frame))) = Pin::new(&mut stream).poll_next(&mut cx) {
+            output.push_str(std::str::from_utf8(&frame).unwrap());
+        }
+        assert!(output.contains("message_stop"));
+        assert!(!output.contains("usage_limit_reached"));
+        assert!(!output.contains("event: error"));
     }
 }

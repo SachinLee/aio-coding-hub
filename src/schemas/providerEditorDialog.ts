@@ -97,6 +97,19 @@ export function createProviderEditorDialogSchema(options: {
       name: z.string().trim().min(1, { message: "名称不能为空" }),
       api_key: z.string(),
       auth_mode: z.enum(["api_key", "oauth"]),
+      oauth_min_remaining_percent: z.string().transform((raw, ctx) => {
+        if (!raw.trim()) return null;
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0 || value > 100) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "最低订阅剩余额度必须为 0-100 之间的数字",
+          });
+          return z.NEVER;
+        }
+        return value;
+      }),
+      oauth_use_credits: z.boolean(),
       cost_multiplier: parseCostMultiplier(),
       limit_5h_usd: parseLimitUsd("5 小时消费上限"),
       limit_daily_usd: parseLimitUsd("每日消费上限"),

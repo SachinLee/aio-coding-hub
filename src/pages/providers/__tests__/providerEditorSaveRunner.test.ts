@@ -46,6 +46,8 @@ function makeSavedProvider(partial: Partial<ProviderSummary> = {}): ProviderSumm
     },
     stream_idle_timeout_seconds: partial.stream_idle_timeout_seconds ?? null,
     supports_websockets: partial.supports_websockets ?? false,
+    oauth_min_remaining_percent: partial.oauth_min_remaining_percent ?? null,
+    oauth_use_credits: partial.oauth_use_credits ?? false,
     extension_values: partial.extension_values ?? [],
     custom_headers: partial.custom_headers ?? [],
     api_key_configured: partial.api_key_configured ?? true,

@@ -523,6 +523,8 @@ fn config_import_v2_restores_full_prompt_and_skill_payload() {
             limit_weekly_usd: Some(3.0),
             limit_monthly_usd: Some(4.0),
             limit_total_usd: Some(5.0),
+            oauth_min_remaining_percent: None,
+            oauth_use_credits: false,
             daily_reset_mode: "fixed".to_string(),
             daily_reset_time: "00:00:00".to_string(),
             tags_json: "[\"team\"]".to_string(),
@@ -1105,4 +1107,45 @@ fn custom_headers_export_import_legacy_and_invalid_rollback() {
             .custom_headers
             .is_empty()
     );
+}
+
+#[test]
+fn oauth_quota_policy_export_import_legacy_defaults_and_invalid_rollback() {
+    let fixture = ConfigMigrateTestApp::new();
+    let app = fixture.handle();
+    insert_supports_websockets_provider(&fixture.db.open_connection().unwrap());
+    let mut bundle = config_export(&app, &fixture.db).unwrap();
+    bundle.providers[0].oauth_min_remaining_percent = Some(5.25);
+    bundle.providers[0].oauth_use_credits = true;
+    config_import(&app, &fixture.db, bundle).unwrap();
+    let bundle = config_export(&app, &fixture.db).unwrap();
+    assert_eq!(bundle.providers[0].oauth_min_remaining_percent, Some(5.25));
+    assert!(bundle.providers[0].oauth_use_credits);
+    let saved = crate::providers::list_by_cli(&fixture.db, "codex").unwrap();
+    assert_eq!(saved[0].oauth_min_remaining_percent, Some(5.25));
+    assert!(saved[0].oauth_use_credits);
+    for invalid in [-0.01, 100.01, f64::NAN, f64::INFINITY] {
+        let mut invalid_bundle: ConfigBundle =
+            serde_json::from_value(serde_json::to_value(&bundle).unwrap()).unwrap();
+        invalid_bundle.providers[0].name = "must-rollback".into();
+        invalid_bundle.providers[0].oauth_min_remaining_percent = Some(invalid);
+        let error = config_import(&app, &fixture.db, invalid_bundle)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("oauth_min_remaining_percent"));
+        let retained = crate::providers::list_by_cli(&fixture.db, "codex").unwrap();
+        assert_eq!(retained[0].name, "ws-export");
+        assert_eq!(retained[0].oauth_min_remaining_percent, Some(5.25));
+    }
+    let mut legacy = serde_json::to_value(bundle).unwrap();
+    let provider = legacy["providers"][0].as_object_mut().unwrap();
+    provider.remove("oauth_min_remaining_percent");
+    provider.remove("oauth_use_credits");
+    let legacy: ConfigBundle = serde_json::from_value(legacy).unwrap();
+    assert_eq!(legacy.providers[0].oauth_min_remaining_percent, None);
+    assert!(!legacy.providers[0].oauth_use_credits);
+    config_import(&app, &fixture.db, legacy).unwrap();
+    let saved = crate::providers::list_by_cli(&fixture.db, "codex").unwrap();
+    assert_eq!(saved[0].oauth_min_remaining_percent, None);
+    assert!(!saved[0].oauth_use_credits);
 }

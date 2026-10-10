@@ -316,7 +316,7 @@ mod tests {
             provider_id: 1,
             provider_name: "test-provider".to_string(),
             base_url: "https://upstream.example".to_string(),
-            auth_mode: "api_key".to_string(),
+            oauth_quota_identity: None,
             fake_200_detected: false,
             fake_200_quota_exhausted: false,
             activity: Arc::new(Mutex::new(StreamActivityTracker::new(

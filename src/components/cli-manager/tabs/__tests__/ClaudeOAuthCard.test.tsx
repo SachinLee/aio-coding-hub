@@ -63,6 +63,8 @@ function makeProvider(overrides: Partial<ProviderSummary> = {}): ProviderSummary
     ...overrides,
     stream_idle_timeout_seconds: overrides.stream_idle_timeout_seconds ?? null,
     supports_websockets: overrides.supports_websockets ?? false,
+    oauth_min_remaining_percent: overrides.oauth_min_remaining_percent ?? null,
+    oauth_use_credits: overrides.oauth_use_credits ?? false,
     extension_values: overrides.extension_values ?? [],
     custom_headers: overrides.custom_headers ?? [],
   };

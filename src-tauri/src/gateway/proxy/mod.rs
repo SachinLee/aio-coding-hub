@@ -1,6 +1,10 @@
 //! Usage: Gateway proxy module facade (exports the proxy handler + shared types).
 
-use axum::http::{HeaderMap, Method};
+use axum::{
+    body::Body,
+    http::{header, HeaderMap, Method, Request},
+    response::Response,
+};
 
 mod abort_guard;
 mod caches;
@@ -22,7 +26,7 @@ pub(crate) mod provider_adapters;
 pub(in crate::gateway) mod provider_router;
 mod request_body;
 mod request_context;
-mod request_end;
+pub(in crate::gateway) mod request_end;
 pub(in crate::gateway) mod status_override;
 mod types;
 pub(in crate::gateway) mod upstream_client_error_rules;
@@ -34,7 +38,33 @@ pub(in crate::gateway) use fake_200::{detect_fake_200_non_stream_body, Fake200Pr
 pub(in crate::gateway) use logging::spawn_enqueue_request_log_with_backpressure;
 pub(super) use types::ErrorCategory;
 
-pub(super) use handler::proxy_impl;
+pub(in crate::gateway) use errors::GatewayFailure;
+
+pub(super) async fn proxy_impl<R>(
+    state: crate::gateway::runtime::GatewayAppState<R>,
+    cli_key: String,
+    path: String,
+    req: Request<Body>,
+) -> Response
+where
+    R: tauri::Runtime + 'static,
+    R::Handle: Unpin,
+{
+    let client_ws = req
+        .extensions()
+        .get::<std::sync::Arc<crate::gateway::responses_ws::state::Connection>>()
+        .is_some();
+    let protocol = crate::gateway::client_error::ClientProtocol::for_http_path(&path);
+    let mut response = handler::proxy_impl(state, cli_key, path, req).await;
+    if let Some(failure) = response.extensions().get::<GatewayFailure>().cloned() {
+        if !client_ws && !response.status().is_success() {
+            let body = crate::gateway::client_error::encode_failure(protocol, &failure);
+            *response.body_mut() = Body::from(body.to_string());
+            response.headers_mut().remove(header::CONTENT_LENGTH);
+        }
+    }
+    response
+}
 
 const CLAUDE_COUNT_TOKENS_PATH: &str = "/v1/messages/count_tokens";
 const CLAUDE_LOGGED_MESSAGES_PATH: &str = "/v1/messages";

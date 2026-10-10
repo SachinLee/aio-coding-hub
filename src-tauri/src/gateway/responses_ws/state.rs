@@ -2,6 +2,7 @@
 
 use super::protocol::{HistoryDigest, Owner, TURN_STATE_HEADER};
 use super::upstream::UpstreamConnection;
+use crate::gateway::proxy::GatewayFailure;
 use crate::shared::mutex_ext::MutexExt;
 use axum::http::HeaderMap;
 use rand::RngCore;
@@ -15,6 +16,8 @@ use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore};
 const RECOVERY_TTL: Duration = Duration::from_secs(30);
 const OWNER_IDLE_TTL: Duration = Duration::from_secs(30 * 60);
 const MAX_RECOVERIES: usize = 128;
+// shortcut: retain 128 prior windows per turn; revisit if real turns exceed this compaction count.
+const MAX_PREVIOUS_CONTEXT_WINDOWS: usize = 128;
 const WS_COOLDOWN: Duration = Duration::from_secs(60);
 pub(in crate::gateway) const MAX_CONNECTIONS: usize = 4;
 // ponytail: fixed reservations admit two managed contexts; measure peaks before increasing concurrency.
@@ -182,15 +185,28 @@ impl Runtime {
         }
         let mut records = self.owners.lock_or_recover();
         prune_owners(&mut records);
-        if records.get(owner).is_some_and(|record| {
-            record.active_generation.is_some()
+        if let Some(record) = records.get(owner) {
+            if record.active_generation.is_some()
                 || record.pending.is_some()
-                || record.retired
                 || record.completed.is_none()
-        }) {
-            return Err("Responses generation owner is already in use");
+            {
+                return Err("Responses generation owner is already in use");
+            }
+            // Local compaction opens another client session within the same turn.
+            return Ok(record.nonce.clone());
         }
-        if !records.contains_key(owner) && records.len() >= MAX_RECOVERIES {
+        let nonce = new_nonce();
+        self.insert_owner(&mut records, owner, nonce.clone())?;
+        Ok(nonce)
+    }
+
+    fn insert_owner(
+        &self,
+        records: &mut HashMap<Owner, OwnerRecord>,
+        owner: &Owner,
+        nonce: String,
+    ) -> Result<(), &'static str> {
+        if records.len() >= MAX_RECOVERIES {
             let oldest = records
                 .iter()
                 .filter(|(_, record)| {
@@ -204,21 +220,21 @@ impl Runtime {
                 return Err("Responses recovery owner capacity reached");
             }
         }
-        let nonce = new_nonce();
         records.insert(
             owner.clone(),
             OwnerRecord {
-                nonce: nonce.clone(),
+                nonce,
                 epoch: self.epoch(),
                 active_generation: None,
-                retired: false,
                 http_only: false,
                 completed: None,
+                previous_context_windows: HashSet::new(),
                 pending: None,
+                failure: None,
                 expires: Instant::now() + OWNER_IDLE_TTL,
             },
         );
-        Ok(nonce)
+        Ok(())
     }
 
     /// Admit one generation globally for this owner, including across sockets.
@@ -242,7 +258,6 @@ impl Runtime {
         if !self.enabled()
             || record.epoch != self.epoch()
             || record.nonce != identity.nonce
-            || record.retired
             || record.active_generation.is_some()
             || (record.http_only && request.client_ws)
         {
@@ -270,8 +285,10 @@ impl Runtime {
         Ok(())
     }
 
-    /// A failed request preserves an unclaimed recovery grant; every other failure
-    /// retires the nonce. Successful completion releases the next tool generation.
+    /// Every end releases the turn: Codex cancels a stream to steer or merge
+    /// sub-agent input, and retries failed streams, with the same turn nonce.
+    /// Only success advances the completed history; a suspended generation is no
+    /// longer active here, so its unclaimed recovery grant survives.
     pub(in crate::gateway) fn finish_generation(&self, request: &RequestState, completed: bool) {
         let generation = request.generation.lock_or_recover();
         let Some(identity) = &generation.identity else {
@@ -293,19 +310,116 @@ impl Runtime {
             return;
         }
         record.active_generation = None;
+        // An active generation's grant, if any, was consumed by this generation.
+        record.pending = None;
+        record.expires = Instant::now() + OWNER_IDLE_TTL;
         if completed {
             record.completed = Some(generation.expected.clone());
-            record.pending = None;
+            record.failure = None;
             record.http_only |= !request.client_ws || generation.budget.http_only;
-            record.expires = Instant::now() + OWNER_IDLE_TTL;
-        } else if record
-            .pending
-            .as_ref()
-            .is_none_or(|pending| pending.consumed)
+        }
+    }
+
+    pub(in crate::gateway) fn remember_failure(
+        &self,
+        request: &RequestState,
+        failure: &GatewayFailure,
+    ) {
+        let Some(failure) = failure.unavailable_summary() else {
+            return;
+        };
+        let generation = request.generation.lock_or_recover();
+        let Some(identity) = &generation.identity else {
+            return;
+        };
+        if generation.committed
+            || !generation.expected.is_recoverable()
+            || !generation.input.is_recoverable()
+            || !generation.properties.is_recoverable()
         {
-            record.retired = true;
-            record.pending = None;
-            record.expires = Instant::now() + RECOVERY_TTL;
+            return;
+        }
+        let mut records = self.owners.lock_or_recover();
+        let Some(record) = records.get_mut(&identity.owner) else {
+            return;
+        };
+        if record.epoch != self.epoch()
+            || record.nonce != identity.nonce
+            || !record
+                .active_generation
+                .as_ref()
+                .is_some_and(|active| active.ptr_eq(&Arc::downgrade(&request.generation)))
+            || record
+                .pending
+                .as_ref()
+                .is_some_and(|pending| !pending.consumed)
+        {
+            return;
+        }
+        // Replay only until the announced recovery time; without one a retry is simply
+        // routed again, which costs no upstream call while providers stay unavailable.
+        record.failure = failure
+            .retry_after_seconds
+            .filter(|seconds| *seconds > 0)
+            .and_then(|seconds| Instant::now().checked_add(Duration::from_secs(seconds)))
+            .map(|retry_at| KnownFailure {
+                retry_at,
+                failure,
+                input: generation.input.clone(),
+                expected: generation.expected.clone(),
+                properties: generation.properties.clone(),
+                previous: generation.previous.clone(),
+            });
+    }
+
+    /// Read an ended result before validating socket continuation or claiming recovery resources.
+    pub(in crate::gateway) fn known_failure(
+        &self,
+        owner: &Owner,
+        nonce: Option<&str>,
+        input: &[Value],
+        previous: Option<&str>,
+        properties: &HistoryDigest,
+    ) -> Result<Option<GatewayFailure>, &'static str> {
+        let Some(nonce) = nonce else {
+            return Ok(None);
+        };
+        let mut records = self.owners.lock_or_recover();
+        prune_owners(&mut records);
+        let Some(record) = records.get(owner) else {
+            return Ok(None);
+        };
+        let Some(known) = &record.failure else {
+            return Ok(None);
+        };
+        if !self.enabled()
+            || record.epoch != self.epoch()
+            || record.nonce != nonce
+            || record.active_generation.is_some()
+        {
+            return Err("context recovery ownership mismatch");
+        }
+        let input = HistoryDigest::from_items(input);
+        let original = previous == known.previous.as_deref() && input == known.input;
+        let full = previous.is_none() && input == known.expected;
+        if !input.is_recoverable() || *properties != known.properties || !(original || full) {
+            // Not a retry of the failed request (e.g. steering was merged): route it normally.
+            return Ok(None);
+        }
+        let mut failure = known.failure.clone();
+        failure.retry_after_seconds = Some(
+            known
+                .retry_at
+                .saturating_duration_since(Instant::now())
+                .as_secs(),
+        );
+        Ok(Some(failure))
+    }
+
+    /// Circuit resets and cleared unavailability make remembered failures stale.
+    pub(in crate::gateway) fn clear_failures(&self) {
+        for record in self.owners.lock_or_recover().values_mut() {
+            record.failure = None;
         }
     }
 
@@ -334,7 +448,6 @@ impl Runtime {
         if record.nonce != identity.nonce
             || record.epoch != self.epoch()
             || record.active_generation.is_none()
-            || record.retired
             || record.pending.is_some()
             || !record
                 .active_generation
@@ -376,46 +489,103 @@ impl Runtime {
     ) -> Result<Option<Recovered>, &'static str> {
         let mut records = self.owners.lock_or_recover();
         prune_owners(&mut records);
+        if !records.contains_key(owner) {
+            let previous = records
+                .iter()
+                .find(|(previous, record)| {
+                    let later_window = match (
+                        previous.window.rsplit_once(':'),
+                        owner.window.rsplit_once(':'),
+                    ) {
+                        (Some((old_thread, old)), Some((new_thread, new)))
+                            if old_thread == previous.thread && new_thread == owner.thread =>
+                        {
+                            old.parse::<u64>()
+                                .ok()
+                                .zip(new.parse::<u64>().ok())
+                                .is_some_and(|(old, new)| new > old)
+                        }
+                        _ => false,
+                    };
+                    self.enabled()
+                        && record.epoch == self.epoch()
+                        && nonce == Some(record.nonce.as_str())
+                        && previous.session == owner.session
+                        && previous.thread == owner.thread
+                        && (previous.window == owner.window || later_window)
+                        && previous.turn == owner.turn
+                        && previous.context_window != owner.context_window
+                        && !record
+                            .previous_context_windows
+                            .contains(&owner.context_window)
+                        && record.active_generation.is_none()
+                        && record.pending.is_none()
+                        && record.failure.is_none()
+                        && record.completed.is_some()
+                        && (!client_ws || !record.http_only)
+                })
+                .map(|(previous, _)| previous.clone());
+            if let Some(previous) = previous {
+                if records[&previous].previous_context_windows.len() >= MAX_PREVIOUS_CONTEXT_WINDOWS
+                {
+                    return Err("Responses context window capacity reached");
+                }
+                // Codex keeps its first turn nonce after compaction; this starts new history,
+                // while a pending or failed generation must keep its original recovery budget.
+                let mut record = records.remove(&previous).expect("matched Responses owner");
+                record
+                    .previous_context_windows
+                    .insert(previous.context_window);
+                record.completed = None;
+                records.insert(owner.clone(), record);
+                return Ok(None);
+            }
+        }
         let Some(record) = records.get_mut(owner) else {
-            return if nonce.is_some_and(is_local_nonce) {
-                Err("unknown or expired Responses owner nonce")
-            } else {
-                Ok(None)
+            let Some(nonce) = nonce.filter(|nonce| is_local_nonce(nonce)) else {
+                return Ok(None);
             };
+            let tracked = records.iter().any(|(known, record)| {
+                record.nonce == nonce
+                    || (known.session == owner.session
+                        && known.thread == owner.thread
+                        && known.turn == owner.turn)
+            });
+            if !self.enabled() || tracked {
+                return Err("unknown or expired Responses owner nonce");
+            }
+            // Codex keeps a turn's first nonce for the whole turn. After a gateway restart,
+            // settings change or idle expiry nothing tracks the turn any more, so it continues
+            // under that nonce as a fresh owner; no recovery grant survives the lost record.
+            self.insert_owner(&mut records, owner, nonce.to_owned())?;
+            return Ok(None);
         };
-        if nonce.is_none()
-            && record.active_generation.is_none()
-            && record.pending.is_none()
-            && !record.retired
-        {
+        if nonce.is_none() && record.active_generation.is_none() && record.pending.is_none() {
             return Ok(None);
         }
         if !self.enabled()
             || record.epoch != self.epoch()
             || record.active_generation.is_some()
-            || record.retired
             || nonce != Some(record.nonce.as_str())
             || (client_ws && record.http_only)
         {
             return Err("context recovery ownership mismatch");
         }
-        let expected = HistoryDigest::from_items(input);
-        if !expected.is_recoverable() || !properties.is_recoverable() {
-            return Err("context recovery contains unsupported history");
-        }
+        // Recovery is best effort: a request the gateway cannot match to its grant is
+        // still the client's authoritative history, so it runs as a fresh generation.
         let Some(pending) = record.pending.as_mut() else {
-            return if record
-                .completed
-                .as_ref()
-                .is_some_and(|history| history.is_strict_prefix_of(input))
-            {
-                Ok(None)
-            } else {
-                Err("context recovery has no matching generation")
-            };
+            return Ok(None);
         };
-        if pending.consumed || pending.properties != *properties || expected != pending.expected {
+        let expected = HistoryDigest::from_items(input);
+        let exact = expected == pending.expected && pending.properties == *properties;
+        if pending.consumed || (!exact && expected.count <= pending.expected.count) {
             return Err("context recovery history or constraints mismatch");
+        }
+        if !exact {
+            // A longer resend supersedes the suspended request, e.g. Codex merged steering
+            // or sub-agent input into it; stale or partial replays keep the grant intact.
+            record.pending = None;
+            return Ok(None);
         }
         pending.consumed = true;
         Ok(Some(Recovered {
@@ -432,9 +602,9 @@ impl Runtime {
         headers: &HeaderMap,
         body: &Value,
         forced: Option<i64>,
-    ) -> Result<Option<RequestState>, &'static str> {
+    ) -> Result<PreparedRequest, &'static str> {
         let Some(nonce) = recovery_nonce(headers, body)? else {
-            return Ok(None);
+            return Ok(PreparedRequest::Dispatch(None));
         };
         let body_owner = body
             .pointer("/client_metadata/x-codex-turn-metadata")
@@ -461,17 +631,26 @@ impl Runtime {
         let owner = body_owner
             .or(header_owner)
             .ok_or("missing Codex turn metadata for recovery")?;
+        let input = body
+            .get("input")
+            .and_then(Value::as_array)
+            .ok_or("missing full recovery input")?;
+        let properties = request_properties(body, forced);
+        if let Some(failure) = self.known_failure(
+            &owner,
+            Some(nonce),
+            input,
+            body.get("previous_response_id").and_then(Value::as_str),
+            &properties,
+        )? {
+            return Ok(PreparedRequest::Failure(failure));
+        }
         if body
             .get("previous_response_id")
             .is_some_and(|value| !value.is_null())
         {
             return Err("HTTP context recovery requires full input");
         }
-        let input = body
-            .get("input")
-            .and_then(Value::as_array)
-            .ok_or("missing full recovery input")?;
-        let properties = request_properties(body, forced);
         // Reserve before claiming: local pressure must not consume a recovery grant.
         let buffers = self.reserve_raw_buffers()?;
         let recovered = self.claim_for_transport(&owner, Some(nonce), input, &properties, false)?;
@@ -497,6 +676,7 @@ impl Runtime {
                     nonce: nonce.to_owned(),
                 }),
                 expected: HistoryDigest::from_items(input),
+                input: HistoryDigest::from_items(input),
                 properties,
                 previous: None,
                 committed: false,
@@ -511,7 +691,7 @@ impl Runtime {
             })),
         };
         self.begin_generation(&request)?;
-        Ok(Some(request))
+        Ok(PreparedRequest::Dispatch(Some(request)))
     }
 }
 
@@ -554,10 +734,11 @@ struct OwnerRecord {
     nonce: String,
     epoch: u64,
     active_generation: Option<Weak<Mutex<Generation>>>,
-    retired: bool,
     http_only: bool,
     completed: Option<HistoryDigest>,
+    previous_context_windows: HashSet<String>,
     pending: Option<Pending>,
+    failure: Option<KnownFailure>,
     expires: Instant,
 }
 
@@ -571,8 +752,7 @@ fn prune_owners(records: &mut HashMap<Owner, OwnerRecord>) {
         {
             record.active_generation = None;
             record.pending = None;
-            record.retired = true;
-            record.expires = now + RECOVERY_TTL;
+            record.expires = now + OWNER_IDLE_TTL;
         }
         if record.active_generation.is_none()
             && record
@@ -581,8 +761,14 @@ fn prune_owners(records: &mut HashMap<Owner, OwnerRecord>) {
                 .is_some_and(|pending| pending.expires <= now)
         {
             record.pending = None;
-            record.retired = true;
-            record.expires = now + RECOVERY_TTL;
+            record.expires = now + OWNER_IDLE_TTL;
+        }
+        if record
+            .failure
+            .as_ref()
+            .is_some_and(|known| known.retry_at <= now)
+        {
+            record.failure = None;
         }
     }
     records.retain(|_, record| record.active_generation.is_some() || record.expires > now);
@@ -632,9 +818,27 @@ pub(in crate::gateway) struct RequestState {
     pub(in crate::gateway) client_ws: bool,
 }
 
+pub(in crate::gateway) struct GenerationLease(pub(in crate::gateway) Option<RequestState>);
+
+impl Drop for GenerationLease {
+    fn drop(&mut self) {
+        if let Some(request) = &self.0 {
+            let completed = {
+                let generation = request.generation.lock_or_recover();
+                generation.terminal && !generation.failed
+            };
+            request
+                .connection
+                .runtime
+                .finish_generation(request, completed);
+        }
+    }
+}
+
 pub(in crate::gateway) struct Generation {
     pub(in crate::gateway) identity: Option<RecoveryIdentity>,
     pub(in crate::gateway) expected: HistoryDigest,
+    pub(in crate::gateway) input: HistoryDigest,
     pub(in crate::gateway) properties: HistoryDigest,
     pub(in crate::gateway) previous: Option<String>,
     pub(in crate::gateway) committed: bool,
@@ -646,6 +850,30 @@ pub(in crate::gateway) struct Generation {
     pub(in crate::gateway) trace_id: String,
     pub(in crate::gateway) budget: Budget,
     pub(in crate::gateway) upstream_ws: bool,
+}
+
+pub(in crate::gateway) enum PreparedRequest {
+    Dispatch(Option<RequestState>),
+    Failure(GatewayFailure),
+}
+
+#[cfg(test)]
+impl PreparedRequest {
+    fn unwrap_dispatch(self) -> Option<RequestState> {
+        match self {
+            Self::Dispatch(request) => request,
+            Self::Failure(_) => panic!("expected generation dispatch"),
+        }
+    }
+}
+
+struct KnownFailure {
+    failure: GatewayFailure,
+    retry_at: Instant,
+    input: HistoryDigest,
+    expected: HistoryDigest,
+    properties: HistoryDigest,
+    previous: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -771,6 +999,7 @@ mod tests {
                     nonce: nonce.into(),
                 }),
                 expected: HistoryDigest::from_items(items),
+                input: HistoryDigest::from_items(items),
                 properties: HistoryDigest::default(),
                 previous: Some("resp_1".into()),
                 committed: false,
@@ -784,6 +1013,29 @@ mod tests {
                 upstream_ws: false,
             })),
         }
+    }
+
+    /// Claim then admit a fresh generation, as ingress does for every create.
+    fn begin_fresh(
+        runtime: &Arc<Runtime>,
+        owner: &Owner,
+        nonce: &str,
+        items: &[Value],
+    ) -> Result<(), &'static str> {
+        assert!(runtime
+            .claim(owner, Some(nonce), items, &HistoryDigest::default())?
+            .is_none());
+        let request = request(runtime, nonce, items, false);
+        request
+            .generation
+            .lock_or_recover()
+            .identity
+            .as_mut()
+            .unwrap()
+            .owner = owner.clone();
+        runtime.begin_generation(&request)?;
+        runtime.finish_generation(&request, false);
+        Ok(())
     }
 
     #[test]
@@ -810,6 +1062,438 @@ mod tests {
         assert!(runtime
             .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
             .is_err());
+    }
+
+    #[test]
+    fn completed_generation_can_start_a_compacted_context_without_replaying_old_windows() {
+        let runtime = Arc::new(Runtime::new(true));
+        let nonce = runtime.issue_nonce(&owner()).unwrap();
+        let items = vec![input("first"), input("tool result")];
+        let original = request(&runtime, &nonce, &items, false);
+        runtime.begin_generation(&original).unwrap();
+        runtime.finish_generation(&original, true);
+        assert_eq!(runtime.issue_nonce(&owner()).unwrap(), nonce);
+        let summary = vec![input("compacted history")];
+        let mut compacted_owner = owner();
+        compacted_owner.context_window = "compacted".into();
+        assert!(runtime
+            .claim(
+                &compacted_owner,
+                Some(&nonce),
+                &summary,
+                &HistoryDigest::default()
+            )
+            .unwrap()
+            .is_none());
+        let mut competing_owner = compacted_owner.clone();
+        competing_owner.context_window = "competing-compaction".into();
+        assert!(runtime
+            .claim(
+                &competing_owner,
+                Some(&nonce),
+                &summary,
+                &HistoryDigest::default()
+            )
+            .is_err());
+        let compacted = request(&runtime, &nonce, &summary, false);
+        compacted
+            .generation
+            .lock_or_recover()
+            .identity
+            .as_mut()
+            .unwrap()
+            .owner = compacted_owner.clone();
+        runtime.begin_generation(&compacted).unwrap();
+        runtime.finish_generation(&compacted, true);
+        assert_eq!(runtime.issue_nonce(&compacted_owner).unwrap(), nonce);
+        drop((original, compacted));
+        assert!(runtime
+            .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
+            .is_err());
+        assert!(begin_fresh(&runtime, &compacted_owner, &nonce, &summary).is_err());
+        let extended = vec![input("compacted history"), input("next tool result")];
+        assert!(runtime
+            .claim(
+                &compacted_owner,
+                Some(&nonce),
+                &extended,
+                &HistoryDigest::default()
+            )
+            .unwrap()
+            .is_none());
+        let mut next_owner = compacted_owner.clone();
+        next_owner.context_window = "compacted-again".into();
+        assert!(runtime
+            .claim(
+                &next_owner,
+                Some(&nonce),
+                &summary,
+                &HistoryDigest::default()
+            )
+            .unwrap()
+            .is_none());
+        assert!(runtime
+            .claim(
+                &compacted_owner,
+                Some(&nonce),
+                &summary,
+                &HistoryDigest::default()
+            )
+            .is_err());
+        assert_eq!(runtime.owners.lock_or_recover().len(), 1);
+    }
+
+    #[test]
+    fn compaction_cannot_reset_unfinished_failed_or_expired_generation_ownership() {
+        for state in [
+            "unstarted",
+            "active",
+            "pending",
+            "cancelled",
+            "unavailable",
+            "expired",
+            "disabled",
+            "http_only",
+        ] {
+            let runtime = Arc::new(Runtime::new(true));
+            let nonce = runtime.issue_nonce(&owner()).unwrap();
+            let items = vec![input("first")];
+            let original = request(&runtime, &nonce, &items, false);
+            if state != "unstarted" {
+                runtime.begin_generation(&original).unwrap();
+            }
+            match state {
+                "pending" => runtime.suspend(&original).unwrap(),
+                "cancelled" => runtime.finish_generation(&original, false),
+                "unavailable" => {
+                    runtime.remember_failure(
+                        &original,
+                        &GatewayFailure {
+                            status: axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                            trace_id: "failed".into(),
+                            error_code: "GW_ALL_PROVIDERS_UNAVAILABLE".into(),
+                            message: "No available providers".into(),
+                            attempts: vec![],
+                            retry_after_seconds: Some(60),
+                        },
+                    );
+                    runtime.finish_generation(&original, false);
+                }
+                "expired" | "disabled" | "http_only" => {
+                    runtime.finish_generation(&original, true);
+                    match state {
+                        "expired" => {
+                            runtime
+                                .owners
+                                .lock_or_recover()
+                                .get_mut(&owner())
+                                .unwrap()
+                                .expires = Instant::now()
+                        }
+                        "disabled" => runtime.set_enabled(false),
+                        "http_only" => {
+                            runtime
+                                .owners
+                                .lock_or_recover()
+                                .get_mut(&owner())
+                                .unwrap()
+                                .http_only = true
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                _ => {}
+            }
+            let mut compacted_owner = owner();
+            compacted_owner.context_window = "compacted".into();
+            let claimed = runtime.claim(
+                &compacted_owner,
+                Some(&nonce),
+                &[input("summary")],
+                &HistoryDigest::default(),
+            );
+            if state == "expired" {
+                // Nothing tracks the turn any more: it continues fresh, without old budget.
+                assert!(claimed.unwrap().is_none());
+            } else {
+                assert!(
+                    claimed.is_err(),
+                    "must preserve {state} generation ownership"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn compaction_window_numbers_advance_only_within_the_same_thread() {
+        let runtime = Arc::new(Runtime::new(true));
+        let mut original_owner = owner();
+        original_owner.window = "thread:2".into();
+        let nonce = runtime.issue_nonce(&original_owner).unwrap();
+        let items = vec![input("first")];
+        let original = request(&runtime, &nonce, &items, false);
+        original
+            .generation
+            .lock_or_recover()
+            .identity
+            .as_mut()
+            .unwrap()
+            .owner = original_owner.clone();
+        runtime.begin_generation(&original).unwrap();
+        runtime.finish_generation(&original, true);
+        let mut next_owner = original_owner;
+        next_owner.context_window = "compacted".into();
+        for window in [
+            "thread:1",
+            "other:3",
+            "thread:invalid",
+            "other-window",
+            "thread:18446744073709551616",
+        ] {
+            next_owner.window = window.into();
+            assert!(runtime
+                .claim(&next_owner, Some(&nonce), &items, &HistoryDigest::default())
+                .is_err());
+        }
+        next_owner.window = "thread:3".into();
+        assert!(runtime
+            .claim(&next_owner, Some(&nonce), &items, &HistoryDigest::default())
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn compaction_requires_the_same_turn_nonce_and_bounds_window_replay_metadata() {
+        let runtime = Arc::new(Runtime::new(true));
+        let nonce = runtime.issue_nonce(&owner()).unwrap();
+        let items = vec![input("first")];
+        let original = request(&runtime, &nonce, &items, false);
+        runtime.begin_generation(&original).unwrap();
+        runtime.finish_generation(&original, true);
+        let mut compacted_owner = owner();
+        compacted_owner.context_window = "compacted".into();
+        for field in ["session", "thread", "window", "turn"] {
+            let mut other = compacted_owner.clone();
+            match field {
+                "session" => other.session = "other".into(),
+                "thread" => other.thread = "other".into(),
+                "window" => other.window = "other".into(),
+                "turn" => other.turn = "other".into(),
+                _ => unreachable!(),
+            }
+            assert!(runtime
+                .claim(&other, Some(&nonce), &items, &HistoryDigest::default())
+                .is_err());
+        }
+        assert!(runtime
+            .claim(
+                &compacted_owner,
+                Some("aio-ws-other"),
+                &items,
+                &HistoryDigest::default()
+            )
+            .is_err());
+        runtime
+            .owners
+            .lock_or_recover()
+            .get_mut(&owner())
+            .unwrap()
+            .previous_context_windows = (0..MAX_PREVIOUS_CONTEXT_WINDOWS)
+            .map(|i| format!("old-{i}"))
+            .collect();
+        assert!(matches!(
+            runtime.claim(
+                &compacted_owner,
+                Some(&nonce),
+                &items,
+                &HistoryDigest::default()
+            ),
+            Err("Responses context window capacity reached")
+        ));
+        assert!(runtime.owners.lock_or_recover().contains_key(&owner()));
+    }
+
+    #[test]
+    fn known_unavailability_matches_delta_or_full_history_and_never_claims_a_budget() {
+        let runtime = Arc::new(Runtime::new(true));
+        let nonce = runtime.issue_nonce(&owner()).unwrap();
+        let items = vec![input("first"), input("tool result")];
+        let original = request(&runtime, &nonce, &items, false);
+        let body = json!({"model":"model-a","input":items});
+        {
+            let mut generation = original.generation.lock_or_recover();
+            generation.input = HistoryDigest::from_items(&items[1..]);
+            generation.properties = request_properties(&body, Some(3));
+            generation.budget.http_only = true;
+        }
+        runtime.begin_generation(&original).unwrap();
+        let failure = GatewayFailure {
+            status: axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            trace_id: "original-failure".into(),
+            error_code: "GW_ALL_PROVIDERS_UNAVAILABLE".into(),
+            message: "No available providers: all candidate providers have open circuit breakers"
+                .into(),
+            attempts: vec![json!({"upstream_sent":false})],
+            retry_after_seconds: Some(60),
+        };
+        runtime.remember_failure(&original, &failure);
+        runtime.finish_generation(&original, false);
+        let properties = request_properties(&body, Some(3));
+        let expires = runtime.owners.lock_or_recover()[&owner()].expires;
+        let read = || {
+            runtime.known_failure(
+                &owner(),
+                Some(&nonce),
+                &items[1..],
+                Some("resp_1"),
+                &properties,
+            )
+        };
+        for _ in 0..2 {
+            let result = read().unwrap().unwrap();
+            assert_eq!(result.trace_id, failure.trace_id);
+            assert!(result.attempts.is_empty());
+            assert!(result.retry_after_seconds.unwrap() <= 60);
+            assert_eq!(runtime.owners.lock_or_recover()[&owner()].expires, expires);
+        }
+        // Other requests in the turn are not retries of the failure and route normally.
+        assert!(runtime
+            .known_failure(
+                &owner(),
+                Some(&nonce),
+                &items[1..],
+                Some("changed"),
+                &properties
+            )
+            .unwrap()
+            .is_none());
+        assert!(runtime
+            .known_failure(
+                &owner(),
+                Some(&nonce),
+                &items,
+                None,
+                &request_properties(&body, None)
+            )
+            .unwrap()
+            .is_none());
+        assert!(runtime
+            .known_failure(&owner(), Some("aio-ws-forged"), &items, None, &properties)
+            .is_err());
+        assert!(runtime
+            .claim_for_transport(&owner(), Some(&nonce), &items, &properties, false)
+            .unwrap()
+            .is_none());
+
+        // Both buffer reservations are occupied; result reading still works over HTTP.
+        let _other_connection = runtime.connection().unwrap();
+        let headers = HeaderMap::from_iter([
+            (axum::http::HeaderName::from_static(TURN_STATE_HEADER), nonce.parse().unwrap()),
+            (axum::http::HeaderName::from_static("x-codex-turn-metadata"), json!({"session_id":"session","thread_id":"thread","window_id":"window","context_window_id":"context","turn_id":"turn"}).to_string().parse().unwrap()),
+        ]);
+        assert!(matches!(
+            runtime.prepare_http_recovery(&headers, &body, Some(3)),
+            Ok(PreparedRequest::Failure(_))
+        ));
+        {
+            let mut records = runtime.owners.lock_or_recover();
+            let known = records.get_mut(&owner()).unwrap().failure.as_mut().unwrap();
+            known.retry_at = Instant::now().checked_sub(Duration::from_secs(31)).unwrap();
+        }
+        // Once providers may have recovered, the same retry is routed again.
+        assert!(read().unwrap().is_none());
+        assert!(runtime.owners.lock_or_recover()[&owner()].failure.is_none());
+        runtime
+            .owners
+            .lock_or_recover()
+            .get_mut(&owner())
+            .unwrap()
+            .expires = Instant::now();
+        assert!(read().unwrap().is_none());
+        assert!(runtime
+            .prepare_http_recovery(&headers, &body, Some(3))
+            .is_err());
+    }
+
+    #[test]
+    fn unavailability_without_recovery_time_or_after_reset_is_routed_again() {
+        for case in ["no_retry_time", "reset"] {
+            let runtime = Arc::new(Runtime::new(true));
+            let nonce = runtime.issue_nonce(&owner()).unwrap();
+            let items = vec![input("first")];
+            let original = request(&runtime, &nonce, &items, false);
+            runtime.begin_generation(&original).unwrap();
+            runtime.remember_failure(
+                &original,
+                &GatewayFailure {
+                    status: axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                    trace_id: "original".into(),
+                    error_code: "GW_ALL_PROVIDERS_UNAVAILABLE".into(),
+                    message: "No available providers".into(),
+                    attempts: vec![],
+                    retry_after_seconds: (case == "reset").then_some(60),
+                },
+            );
+            runtime.finish_generation(&original, false);
+            drop(original);
+            let read = || {
+                runtime.known_failure(
+                    &owner(),
+                    Some(&nonce),
+                    &items,
+                    None,
+                    &HistoryDigest::default(),
+                )
+            };
+            if case == "reset" {
+                assert_eq!(read().unwrap().unwrap().trace_id, "original");
+                runtime.clear_failures();
+            }
+            assert!(read().unwrap().is_none());
+            assert!(begin_fresh(&runtime, &owner(), &nonce, &items).is_ok());
+        }
+    }
+
+    #[test]
+    fn recovery_signal_and_non_unavailable_failures_are_not_retained_as_results() {
+        for (status, code) in [
+            (400, "previous_response_not_found"),
+            (502, "GW_STREAM_ERROR"),
+            (503, "GW_INTERNAL_ERROR"),
+        ] {
+            let runtime = Arc::new(Runtime::new(true));
+            let nonce = runtime.issue_nonce(&owner()).unwrap();
+            let items = vec![input("hello")];
+            let original = request(&runtime, &nonce, &items, false);
+            runtime.begin_generation(&original).unwrap();
+            runtime.remember_failure(
+                &original,
+                &GatewayFailure {
+                    status: axum::http::StatusCode::from_u16(status).unwrap(),
+                    trace_id: "original".into(),
+                    error_code: code.into(),
+                    message: "failed".into(),
+                    attempts: vec![],
+                    retry_after_seconds: None,
+                },
+            );
+            assert!(runtime.owners.lock_or_recover()[&owner()].failure.is_none());
+            if code == "previous_response_not_found" {
+                runtime.suspend(&original).unwrap();
+                runtime.finish_generation(&original, false);
+                assert!(runtime
+                    .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
+                    .unwrap()
+                    .is_some());
+            } else {
+                runtime.finish_generation(&original, false);
+                // Codex retries the failed stream with the same turn nonce: no grant, fresh generation.
+                assert!(runtime
+                    .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
+                    .unwrap()
+                    .is_none());
+            }
+        }
     }
 
     #[test]
@@ -843,7 +1527,7 @@ mod tests {
     }
 
     #[test]
-    fn canceled_expired_unknown_and_disabled_nonces_cannot_open_fresh_budget() {
+    fn expired_nonce_continues_fresh_while_forged_and_disabled_nonces_are_rejected() {
         let runtime = Arc::new(Runtime::new(true));
         let nonce = runtime.issue_nonce(&owner()).unwrap();
         let items = vec![input("synthetic")];
@@ -852,18 +1536,14 @@ mod tests {
         assert!(runtime.issue_nonce(&owner()).is_err());
         assert!(runtime.begin_generation(&request).is_err());
         runtime.finish_generation(&request, false);
-        assert!(runtime
-            .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
-            .is_err());
         runtime
             .owners
             .lock_or_recover()
             .get_mut(&owner())
             .unwrap()
             .expires = Instant::now();
-        assert!(runtime
-            .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
-            .is_err());
+        // A gateway restart or idle expiry forgets the turn; it continues without a budget.
+        assert!(begin_fresh(&runtime, &owner(), &nonce, &items).is_ok());
         assert!(runtime
             .claim(
                 &owner(),
@@ -882,7 +1562,11 @@ mod tests {
     fn recovery_preserves_constraints_and_attempt_deadline() {
         let runtime = Arc::new(Runtime::new(true));
         let nonce = runtime.issue_nonce(&owner()).unwrap();
-        let items = vec![input("synthetic")];
+        let items = vec![
+            input("synthetic"),
+            json!({"type":"compaction","id":"cmp_checkpoint","encrypted_content":"synthetic-checkpoint"}),
+            json!({"type":"compaction_trigger"}),
+        ];
         let request = request(&runtime, &nonce, &items, false);
         let deadline = Instant::now() + Duration::from_secs(5);
         let properties = request_properties(&json!({"model":"model-a"}), Some(3));
@@ -897,6 +1581,11 @@ mod tests {
         }
         runtime.begin_generation(&request).unwrap();
         runtime.suspend(&request).unwrap();
+        let mut changed_checkpoint = items.clone();
+        changed_checkpoint[1]["encrypted_content"] = json!("changed-checkpoint");
+        assert!(runtime
+            .claim(&owner(), Some(&nonce), &changed_checkpoint, &properties)
+            .is_err());
         assert!(runtime
             .claim(
                 &owner(),
@@ -932,6 +1621,7 @@ mod tests {
         assert!(runtime
             .prepare_http_recovery(&headers, &body, None)
             .unwrap()
+            .unwrap_dispatch()
             .is_none());
         let nonce = runtime.issue_nonce(&owner()).unwrap();
         let original = request(&runtime, &nonce, &items, false);
@@ -943,6 +1633,7 @@ mod tests {
         let recovered = runtime
             .prepare_http_recovery(&headers, &body, None)
             .unwrap()
+            .unwrap_dispatch()
             .unwrap();
         assert!(!recovered.client_ws);
         assert!(recovered.generation.lock_or_recover().budget.http_only);
@@ -968,6 +1659,7 @@ mod tests {
         let next = runtime
             .prepare_http_recovery(&headers, &body, None)
             .unwrap()
+            .unwrap_dispatch()
             .unwrap();
         assert!(!next.generation.lock_or_recover().recovered);
         assert!(next.generation.lock_or_recover().budget.http_only);
@@ -998,7 +1690,7 @@ mod tests {
         assert!(runtime.connection().is_err());
     }
     #[test]
-    fn exhausted_attempt_deadline_is_preserved_for_failover_but_expired_grant_is_rejected() {
+    fn exhausted_attempt_deadline_is_preserved_for_failover_but_expired_grant_is_not_reissued() {
         let runtime = Arc::new(Runtime::new(true));
         let nonce = runtime.issue_nonce(&owner()).unwrap();
         let items = vec![input("synthetic")];
@@ -1023,7 +1715,8 @@ mod tests {
             .expires = Instant::now();
         assert!(runtime
             .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
-            .is_err());
+            .unwrap()
+            .is_none());
         assert!(runtime.issue_nonce(&owner()).is_err());
     }
 
@@ -1055,6 +1748,129 @@ mod tests {
         let next = vec![input("first"), input("next")];
         assert!(runtime
             .claim(&owner(), Some(&nonce), &next, &HistoryDigest::default())
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn ended_generation_releases_the_turn_for_the_next_codex_request() {
+        // Codex cancels a stream to merge steering or sub-agent input, then resends
+        // the turn on a new socket with the same nonce.
+        for dropped in [false, true] {
+            let runtime = Arc::new(Runtime::new(true));
+            let nonce = runtime.issue_nonce(&owner()).unwrap();
+            let first = vec![input("first")];
+            let completed = request(&runtime, &nonce, &first, false);
+            runtime.begin_generation(&completed).unwrap();
+            runtime.finish_generation(&completed, true);
+            drop(completed);
+            let second = vec![input("first"), input("second")];
+            let ended = request(&runtime, &nonce, &second, false);
+            runtime.begin_generation(&ended).unwrap();
+            if dropped {
+                drop(ended);
+            } else {
+                runtime.finish_generation(&ended, false);
+            }
+            assert!(begin_fresh(&runtime, &owner(), &nonce, &first).is_err());
+            assert!(runtime
+                .claim(
+                    &owner(),
+                    Some("aio-ws-forged"),
+                    &second,
+                    &HistoryDigest::default()
+                )
+                .is_err());
+            let steered = vec![input("first"), input("second"), input("steer")];
+            assert!(runtime
+                .claim(&owner(), Some(&nonce), &steered, &HistoryDigest::default())
+                .unwrap()
+                .is_none());
+            let next = request(&runtime, &nonce, &steered, false);
+            runtime.begin_generation(&next).unwrap();
+            assert!(runtime
+                .claim(&owner(), Some(&nonce), &steered, &HistoryDigest::default())
+                .is_err());
+            runtime.finish_generation(&next, true);
+            assert_eq!(
+                runtime.owners.lock_or_recover()[&owner()].completed,
+                Some(HistoryDigest::from_items(&steered))
+            );
+        }
+    }
+
+    #[test]
+    fn first_generation_of_a_turn_can_be_retried_after_it_ends() {
+        let runtime = Arc::new(Runtime::new(true));
+        let nonce = runtime.issue_nonce(&owner()).unwrap();
+        let items = vec![input("first")];
+        let failed = request(&runtime, &nonce, &items, false);
+        runtime.begin_generation(&failed).unwrap();
+        runtime.finish_generation(&failed, false);
+        drop(failed);
+        assert!(runtime
+            .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
+            .unwrap()
+            .is_none());
+        let retry = request(&runtime, &nonce, &items, false);
+        runtime.begin_generation(&retry).unwrap();
+        runtime.finish_generation(&retry, true);
+        drop(retry);
+        assert!(begin_fresh(&runtime, &owner(), &nonce, &items).is_err());
+    }
+
+    #[test]
+    fn longer_resend_supersedes_a_pending_grant_but_stale_replays_keep_it() {
+        for superseded in [false, true] {
+            let runtime = Arc::new(Runtime::new(true));
+            let nonce = runtime.issue_nonce(&owner()).unwrap();
+            let items = vec![input("first"), input("tool result")];
+            let original = request(&runtime, &nonce, &items, false);
+            runtime.begin_generation(&original).unwrap();
+            runtime.suspend(&original).unwrap();
+            runtime.finish_generation(&original, false);
+            drop(original);
+            assert!(runtime
+                .claim(
+                    &owner(),
+                    Some(&nonce),
+                    &items[..1],
+                    &HistoryDigest::default()
+                )
+                .is_err());
+            if superseded {
+                let steered = vec![input("first"), input("tool result"), input("steer")];
+                assert!(begin_fresh(&runtime, &owner(), &nonce, &steered).is_ok());
+                assert!(runtime.owners.lock_or_recover()[&owner()].pending.is_none());
+            } else {
+                assert!(runtime
+                    .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
+                    .unwrap()
+                    .is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn ended_recovered_generation_does_not_revive_its_grant() {
+        let runtime = Arc::new(Runtime::new(true));
+        let nonce = runtime.issue_nonce(&owner()).unwrap();
+        let items = vec![input("first")];
+        let original = request(&runtime, &nonce, &items, false);
+        runtime.begin_generation(&original).unwrap();
+        runtime.suspend(&original).unwrap();
+        runtime.finish_generation(&original, false);
+        drop(original);
+        assert!(runtime
+            .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
+            .unwrap()
+            .is_some());
+        let recovered = request(&runtime, &nonce, &items, true);
+        runtime.begin_generation(&recovered).unwrap();
+        runtime.finish_generation(&recovered, false);
+        drop(recovered);
+        assert!(runtime
+            .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
             .unwrap()
             .is_none());
     }
@@ -1120,6 +1936,7 @@ mod tests {
         let recovered = runtime
             .prepare_http_recovery(&headers, &body, None)
             .unwrap()
+            .unwrap_dispatch()
             .unwrap();
         assert!(recovered.generation.lock_or_recover().recovered);
         assert!(runtime.connection().is_err());

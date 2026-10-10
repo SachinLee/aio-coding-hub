@@ -109,6 +109,10 @@ pub struct ProviderExport {
     pub limit_weekly_usd: Option<f64>,
     pub limit_monthly_usd: Option<f64>,
     pub limit_total_usd: Option<f64>,
+    #[serde(default)]
+    pub oauth_min_remaining_percent: Option<f64>,
+    #[serde(default)]
+    pub oauth_use_credits: bool,
     pub daily_reset_mode: String,
     pub daily_reset_time: String,
     pub tags_json: String,

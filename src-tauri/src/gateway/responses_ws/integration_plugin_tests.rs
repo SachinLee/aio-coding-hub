@@ -11,6 +11,178 @@ use crate::gateway::plugins::pipeline::{
     GatewayPluginPipelineConfig, InMemoryGatewayPluginExecutor,
 };
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+pub(super) fn unavailable_pipeline(
+    calls: Arc<AtomicUsize>,
+    retry: Option<u64>,
+    custom: Option<Value>,
+) -> Arc<GatewayPluginPipeline> {
+    let mut plugin = counting_plugin();
+    plugin.granted_permissions = [
+        "response.body.read",
+        "response.body.write",
+        "response.header.read",
+        "response.header.write",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    plugin.manifest.contributes.as_mut().unwrap().gateway_hooks = vec![PluginHook {
+        name: GatewayPluginHookName::Error.as_str().into(),
+        priority: 0,
+        failure_policy: Some("fail-closed".into()),
+        timeout_ms: None,
+    }];
+    let executor = InMemoryGatewayPluginExecutor::new().with_response_handler(
+        "ws-test-hooks",
+        move |context| {
+            calls.fetch_add(1, Ordering::Relaxed);
+            let mut body: Value =
+                serde_json::from_str(context.response.body.as_deref().unwrap()).unwrap();
+            assert!(
+                body.get("error").is_none(),
+                "hook must still receive the legacy gateway DTO"
+            );
+            let mut headers = BTreeMap::from([("x-plugin-test".into(), "retained".into())]);
+            if let Some(custom) = &custom {
+                body = custom.clone();
+            } else {
+                body["message"] = json!(format!(
+                    "{} (plugin message)",
+                    body["message"].as_str().unwrap()
+                ));
+                if let Some(seconds) = retry {
+                    body["retry_after_seconds"] = json!(seconds);
+                    headers.insert("retry-after".into(), seconds.to_string());
+                }
+            }
+            GatewayHookResult {
+                response_body: Some(body.to_string()),
+                headers,
+                ..GatewayHookResult::continue_unchanged()
+            }
+        },
+    );
+    Arc::new(GatewayPluginPipeline::for_tests(
+        vec![plugin],
+        Arc::new(executor),
+        GatewayPluginPipelineConfig::default(),
+    ))
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn final_hook_message_is_shared_by_cache_and_owner_without_repeating_the_hook() {
+    let fixture = Fixture::new(true).await;
+    let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+    let a = fixture.provider("A", &upstream.origin(), true);
+    fixture
+        .circuit
+        .record_failure(a, crate::gateway::util::now_unix_seconds() as i64, None);
+    let calls = Arc::new(AtomicUsize::new(0));
+    let (gateway, mut logs) = fixture
+        .start_with_pipeline(unavailable_pipeline(calls.clone(), None, None))
+        .await;
+    let client = reqwest::Client::new();
+    let body = json!({"model":"gpt-test","input":[],"stream":true});
+    let first = client
+        .post(format!("{}/v1/responses", gateway.origin()))
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.headers()["x-plugin-test"], "retained");
+    let first: Value = first.json().await.unwrap();
+    let cached: Value = client
+        .post(format!("{}/v1/responses", gateway.origin()))
+        .json(&body)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(cached["error"], first["error"]);
+    assert_eq!(cached["trace_id"], first["trace_id"]);
+    assert!(first["message"]
+        .as_str()
+        .unwrap()
+        .contains("plugin message"));
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    terminal_log(&mut logs).await;
+    assert!(logs.try_recv().is_err());
+    // The existing cached result may also finish a managed WS generation.
+    let metadata = json!({"session_id":"plugin-owner","thread_id":"thread","window_id":"window","context_window_id":"context","turn_id":"turn"}).to_string();
+    let mut body = json!({"type":"response.create","model":"gpt-test","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"client_metadata":{"x-codex-turn-metadata":metadata}});
+    let mut socket = connect(&gateway, "plugin-owner").await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+        [protocol::TURN_STATE_HEADER]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let failed = recv_until(&mut socket, "error").await;
+    assert_eq!(failed["error"], first["error"]);
+    drop(socket);
+    body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+    let ended: Value = client
+        .post(format!("{}/v1/responses", gateway.origin()))
+        .json(&body)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(ended["error"], first["error"]);
+    assert_eq!(ended["trace_id"], first["trace_id"]);
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    assert!(logs.try_recv().is_err());
+    assert!(stub.transports().is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn custom_or_changed_retry_hook_results_are_preserved_without_shared_caching() {
+    for custom in [
+        None,
+        Some(
+            json!({"error":{"type":"plugin_error","code":"PLUGIN_UNAVAILABLE","message":"plugin unavailable"}}),
+        ),
+        Some(
+            json!({"trace_id":"plugin-trace","error_code":"GW_ALL_PROVIDERS_UNAVAILABLE","message":"extended error","attempts":[],"support_id":"plugin-support"}),
+        ),
+    ] {
+        let fixture = Fixture::new(true).await;
+        let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+        let a = fixture.provider("A", &upstream.origin(), true);
+        fixture
+            .circuit
+            .record_failure(a, crate::gateway::util::now_unix_seconds() as i64, None);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (gateway, _logs) = fixture
+            .start_with_pipeline(unavailable_pipeline(calls.clone(), Some(1), custom.clone()))
+            .await;
+        for _ in 0..2 {
+            let response = reqwest::Client::new()
+                .post(format!("{}/v1/responses", gateway.origin()))
+                .json(&json!({"model":"test","input":[]}))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+            assert_eq!(response.headers()["x-plugin-test"], "retained");
+            let body: Value = response.json().await.unwrap();
+            if let Some(custom) = &custom {
+                assert_eq!(body, *custom);
+            } else {
+                assert_eq!(body["retry_after_seconds"], 1);
+                assert_eq!(body["error"]["message"], body["message"]);
+            }
+        }
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+        assert!(stub.transports().is_empty());
+    }
+}
 
 fn counting_plugin() -> PluginDetail {
     let permissions = [

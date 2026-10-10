@@ -90,7 +90,7 @@ export function RequestLogErrorObservationCard({
                   ? ` 触发：${getGatewayErrorShortLabel(group.circuitTriggerErrorCode)}`
                   : ""}
                 {group.circuitRecoverAtUnix != null
-                  ? `，${formatCircuitRecovery(group.circuitRecoverAtUnix)}`
+                  ? `，本组最后预计恢复：${formatCircuitRecovery(group.circuitRecoverAtUnix)}`
                   : ""}
               </div>
             ))}

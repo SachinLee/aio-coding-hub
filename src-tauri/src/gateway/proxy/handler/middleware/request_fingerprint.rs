@@ -14,18 +14,17 @@ impl RequestFingerprintMiddleware {
             ctx.effective_sort_mode_id,
             &ctx.method_hint,
             &ctx.forwarded_path,
-            ctx.query.as_deref(),
-            ctx.session_id.as_deref(),
-            ctx.requested_model.as_deref(),
-            &ctx.headers,
-            &ctx.body_bytes,
+            &ctx.providers
+                .iter()
+                .map(|provider| provider.id)
+                .collect::<Vec<_>>(),
         );
 
         let recovering = ctx.ws_request.as_ref().is_some_and(|request| {
             use crate::shared::mutex_ext::MutexExt;
             request.generation.lock_or_recover().recovered
         });
-        if !recovering {
+        if ctx.observe_request && !recovering {
             match fp::apply_recent_error_cache_gate(
                 &ctx.state.recent_errors,
                 &fingerprints,
@@ -40,8 +39,6 @@ impl RequestFingerprintMiddleware {
             }
         }
 
-        ctx.fingerprint_key = fingerprints.fingerprint_key;
-        ctx.fingerprint_debug = fingerprints.fingerprint_debug;
         ctx.unavailable_fingerprint_key = fingerprints.unavailable_fingerprint_key;
         ctx.unavailable_fingerprint_debug = fingerprints.unavailable_fingerprint_debug;
 

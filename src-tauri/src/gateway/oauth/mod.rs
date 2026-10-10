@@ -2,6 +2,7 @@
 
 pub(crate) mod adapters;
 pub(crate) mod callback_server;
+pub(crate) mod limits;
 pub(crate) mod pkce;
 pub(crate) mod provider_trait;
 pub(crate) mod refresh;

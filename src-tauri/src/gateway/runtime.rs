@@ -63,6 +63,34 @@ mod tests {
     }
 
     #[test]
+    fn quota_recovery_cache_clear_preserves_open_circuit_and_session_binding() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let session = Arc::new(session_manager::SessionManager::new());
+        let recent_errors = Arc::new(Mutex::new(RecentErrorCache::default()));
+        let runtime = GatewayRuntime::for_tests(&rt, session.clone(), recent_errors.clone());
+        runtime.update_circuit_config(1, 60);
+        runtime
+            .circuit
+            .record_failure(7, 100, Some("UPSTREAM_NETWORK_ERROR"));
+        session.bind_sort_mode("codex", "session", Some(3), Some(vec![7]), 100);
+        recent_errors
+            .lock()
+            .unwrap()
+            .insert_unavailable_for_tests(100, 1, "quota-route", 180);
+        let before = runtime.circuit_status(&[7], 100).remove(0);
+        assert_eq!(before.state, "OPEN");
+        assert_eq!(runtime.clear_unavailable_errors(), 1);
+        let after = runtime.circuit_status(&[7], 100).remove(0);
+        assert_eq!(after.state, before.state);
+        assert_eq!(after.failure_count, before.failure_count);
+        assert_eq!(after.open_until, before.open_until);
+        assert_eq!(
+            session.get_bound_sort_mode_id("codex", "session", 100),
+            Some(Some(3))
+        );
+    }
+
+    #[test]
     fn into_handles_finishes_active_requests() {
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         let session = Arc::new(session_manager::SessionManager::new());
@@ -209,7 +237,13 @@ impl GatewayRuntime {
     }
 
     pub(crate) fn clear_recent_errors(&self) -> usize {
+        self.responses_ws.clear_failures();
         self.recent_errors.lock_or_recover().clear()
+    }
+
+    pub(crate) fn clear_unavailable_errors(&self) -> usize {
+        self.responses_ws.clear_failures();
+        self.recent_errors.lock_or_recover().clear_unavailable()
     }
 
     pub(crate) fn clear_cli_route_runtime_state(

@@ -80,6 +80,8 @@ fn row_to_summary(row: &rusqlite::Row<'_>) -> Result<ProviderSummary, rusqlite::
         limit_weekly_usd: decoded.limit_weekly_usd,
         limit_monthly_usd: decoded.limit_monthly_usd,
         limit_total_usd: decoded.limit_total_usd,
+        oauth_min_remaining_percent: row.get("oauth_min_remaining_percent")?,
+        oauth_use_credits: row.get("oauth_use_credits")?,
         tags: tags_from_json(&tags_json),
         note: row.get("note")?,
         created_at: row.get("created_at")?,
@@ -271,6 +273,8 @@ fn insert_provider(
     limit_weekly_usd: Option<f64>,
     limit_monthly_usd: Option<f64>,
     limit_total_usd: Option<f64>,
+    oauth_min_remaining_percent: Option<f64>,
+    oauth_use_credits: bool,
     tags: Option<Vec<String>>,
     note: Option<String>,
     source_provider_id: Option<i64>,
@@ -316,6 +320,8 @@ fn insert_provider(
     let limit_weekly_usd = validate_limit_usd("limit_weekly_usd", limit_weekly_usd)?;
     let limit_monthly_usd = validate_limit_usd("limit_monthly_usd", limit_monthly_usd)?;
     let limit_total_usd = validate_limit_usd("limit_total_usd", limit_total_usd)?;
+    let oauth_min_remaining_percent =
+        validate_oauth_min_remaining_percent(oauth_min_remaining_percent)?;
 
     let daily_reset_mode = daily_reset_mode.unwrap_or(DailyResetMode::Fixed);
     let daily_reset_time_raw = daily_reset_time.as_deref().unwrap_or("00:00:00");
@@ -368,8 +374,10 @@ INSERT INTO providers(
   supports_websockets,
   created_at,
   updated_at,
-  custom_headers_json
-) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '{}', '{}', ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)
+  custom_headers_json,
+  oauth_min_remaining_percent,
+  oauth_use_credits
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '{}', '{}', ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)
 "#,
         params![
             cli_key,
@@ -400,7 +408,9 @@ INSERT INTO providers(
             enabled_to_int(supports_websockets),
             now,
             now,
-            custom_headers_json_value
+            custom_headers_json_value,
+            oauth_min_remaining_percent,
+            oauth_use_credits,
         ],
     )
     .map_err(|e| match e {
@@ -460,6 +470,8 @@ SELECT
   stream_idle_timeout_seconds,
   supports_websockets,
   custom_headers_json,
+  oauth_min_remaining_percent,
+  oauth_use_credits,
   CASE WHEN COALESCE(api_key_plaintext, '') = '' THEN 0 ELSE 1 END AS api_key_configured
 FROM providers
 WHERE id = ?1
@@ -723,6 +735,8 @@ SELECT
   stream_idle_timeout_seconds,
   supports_websockets,
   custom_headers_json,
+  oauth_min_remaining_percent,
+  oauth_use_credits,
   CASE WHEN COALESCE(api_key_plaintext, '') = '' THEN 0 ELSE 1 END AS api_key_configured
 FROM providers
 WHERE cli_key = ?1
@@ -1179,6 +1193,8 @@ pub fn upsert(
         limit_weekly_usd,
         limit_monthly_usd,
         limit_total_usd,
+        oauth_min_remaining_percent,
+        oauth_use_credits,
         tags,
         note,
         source_provider_id,
@@ -1292,6 +1308,8 @@ pub fn upsert(
                 limit_weekly_usd,
                 limit_monthly_usd,
                 limit_total_usd,
+                oauth_min_remaining_percent,
+                oauth_use_credits,
                 tags,
                 note,
                 source_provider_id,
@@ -1415,6 +1433,8 @@ pub fn upsert(
             let next_limit_monthly_usd =
                 validate_limit_usd("limit_monthly_usd", limit_monthly_usd)?;
             let next_limit_total_usd = validate_limit_usd("limit_total_usd", limit_total_usd)?;
+            let oauth_min_remaining_percent =
+                validate_oauth_min_remaining_percent(oauth_min_remaining_percent)?;
 
             let existing_daily_reset_mode = DailyResetMode::parse(&existing_daily_reset_mode_raw)
                 .unwrap_or(DailyResetMode::Fixed);
@@ -1487,7 +1507,9 @@ SET
   stream_idle_timeout_seconds = ?25,
   supports_websockets = ?26,
   updated_at = ?27,
-  custom_headers_json = ?28
+  custom_headers_json = ?28,
+  oauth_min_remaining_percent = ?30,
+  oauth_use_credits = ?31
 WHERE id = ?29
 "#,
                 params![
@@ -1519,7 +1541,9 @@ WHERE id = ?29
                     enabled_to_int(next_supports_websockets),
                     now,
                     next_custom_headers_json,
-                    id
+                    id,
+                    oauth_min_remaining_percent,
+                    oauth_use_credits,
                 ],
             )
             .map_err(|e| match e {
@@ -1579,6 +1603,8 @@ pub fn duplicate(
         limit_weekly_usd,
         limit_monthly_usd,
         limit_total_usd,
+        oauth_min_remaining_percent,
+        oauth_use_credits,
         tags,
         note,
         source_provider_id,
@@ -1685,6 +1711,8 @@ pub fn duplicate(
         limit_weekly_usd,
         limit_monthly_usd,
         limit_total_usd,
+        oauth_min_remaining_percent,
+        oauth_use_credits,
         tags,
         note,
         source_provider_id,

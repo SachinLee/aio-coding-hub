@@ -10,6 +10,8 @@ export type ProviderEditorInitialValues = {
   name: string;
   api_key: string;
   auth_mode: "api_key" | "oauth";
+  oauth_min_remaining_percent: ProviderSummary["oauth_min_remaining_percent"];
+  oauth_use_credits: ProviderSummary["oauth_use_credits"];
   base_urls: string[];
   base_url_mode: "order" | "ping";
   claude_models: ClaudeModels;
@@ -67,6 +69,8 @@ export function buildDuplicatedProviderInitialValues(
     name: buildDuplicatedProviderName(provider.name, existingProviders),
     api_key: "",
     auth_mode: provider.auth_mode,
+    oauth_min_remaining_percent: provider.oauth_min_remaining_percent,
+    oauth_use_credits: provider.oauth_use_credits,
     base_urls: [...provider.base_urls],
     base_url_mode: provider.base_url_mode,
     claude_models: { ...(provider.claude_models ?? {}) } as ClaudeModels,

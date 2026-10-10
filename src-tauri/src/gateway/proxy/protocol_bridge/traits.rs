@@ -126,6 +126,8 @@ pub(crate) struct StreamState {
     pub saw_visible_text: bool,
     /// Whether reasoning should be converted into Anthropic thinking blocks.
     pub enable_reasoning_to_thinking: bool,
+    /// A successful stop or terminal error has already been emitted.
+    pub terminal_seen: bool,
     /// Provider-specific extension state.
     pub extra: HashMap<String, Value>,
 }
@@ -140,6 +142,7 @@ impl Default for StreamState {
             text_emitted: false,
             saw_visible_text: false,
             enable_reasoning_to_thinking: true,
+            terminal_seen: false,
             extra: HashMap::new(),
         }
     }

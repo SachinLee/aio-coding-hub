@@ -115,42 +115,42 @@ pub(super) async fn recover<R: tauri::Runtime>(
         )
         .await;
     };
-    {
+    let incremental = {
         let mut generation = request.generation.lock_or_recover();
         generation
             .budget
             .failed_providers
             .extend(loop_state.failed_provider_ids.iter().copied());
-    }
-    match request.connection.runtime.suspend(request) {
-        Ok(()) => {
-            marker(
-                input,
-                prepared.provider_id,
-                "responses_ws",
-                "full_input_retry",
-                Some("context"),
-                Some("previous_response_not_found"),
-            );
-            finish_error(
-                ctx,
-                input,
-                loop_state,
-                "previous_response_not_found",
-                "Response context is unavailable; resend the full input",
-            )
-            .await
-        }
-        Err(_) => {
-            finish_error(
-                ctx,
-                input,
-                loop_state,
-                "invalid_request",
-                "Response context cannot be safely restored",
-            )
-            .await
-        }
+        generation.previous.is_some()
+    };
+    // Without a grant the client's full resend still runs as a fresh generation.
+    let suspended = request.connection.runtime.suspend(request).is_ok();
+    if suspended || incremental {
+        marker(
+            input,
+            prepared.provider_id,
+            "responses_ws",
+            "full_input_retry",
+            Some("context"),
+            Some("previous_response_not_found"),
+        );
+        finish_error(
+            ctx,
+            input,
+            loop_state,
+            "previous_response_not_found",
+            "Response context is unavailable; resend the full input",
+        )
+        .await
+    } else {
+        finish_error(
+            ctx,
+            input,
+            loop_state,
+            "invalid_request",
+            "Response context cannot be safely restored",
+        )
+        .await
     }
 }
 
@@ -193,15 +193,20 @@ pub(super) async fn finish_error<R: tauri::Runtime>(
             } else {
                 "local"
             }),
-            GatewayErrorCode::StreamError.as_str(),
+            GatewayErrorCode::RequestRejected.as_str(),
             input.started.elapsed().as_millis(),
-        )),
+        ))
+        .with_request_rejection(code, message),
     )
     .await;
     loop_state.abort_guard.disarm();
     let mut event = protocol::error_event(code, message);
     event["trace_id"] = serde_json::Value::String(input.trace_id.clone());
-    LoopControl::Return((StatusCode::BAD_REQUEST, axum::Json(event)).into_response())
+    let mut response = (StatusCode::BAD_REQUEST, axum::Json(event)).into_response();
+    if let Ok(trace_id) = axum::http::HeaderValue::from_str(&input.trace_id) {
+        response.headers_mut().insert("x-trace-id", trace_id);
+    }
+    LoopControl::Return(response)
 }
 
 fn record_attempt<R: tauri::Runtime>(

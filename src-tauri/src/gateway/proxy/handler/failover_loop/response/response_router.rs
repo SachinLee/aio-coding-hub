@@ -214,7 +214,9 @@ where
         provider_id: prepared.provider_id,
         provider_name_base: &prepared.provider_name_base,
         provider_base_url_base: &prepared.provider_base_url_base,
-        auth_mode: prepared.auth_mode.as_str(),
+        oauth_quota_identity: prepared
+            .oauth_quota_provider_id
+            .map(|id| (id, prepared.effective_credential.as_str())),
         provider_index: prepared.provider_index,
         provider_bridged: prepared.provider_bridged,
         session_reuse: prepared.session_reuse,
@@ -318,7 +320,9 @@ where
         provider_id: prepared.provider_id,
         provider_name_base: &prepared.provider_name_base,
         provider_base_url_base: &prepared.provider_base_url_base,
-        auth_mode: prepared.auth_mode.as_str(),
+        oauth_quota_identity: prepared
+            .oauth_quota_provider_id
+            .map(|id| (id, prepared.effective_credential.as_str())),
         provider_index: prepared.provider_index,
         provider_bridged: prepared.provider_bridged,
         session_reuse: prepared.session_reuse,

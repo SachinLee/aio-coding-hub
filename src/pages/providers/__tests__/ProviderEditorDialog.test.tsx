@@ -110,6 +110,8 @@ function makeProvider(partial: Partial<ProviderSummary> = {}): ProviderSummary {
     ...partial,
     stream_idle_timeout_seconds: partial.stream_idle_timeout_seconds ?? null,
     supports_websockets: partial.supports_websockets ?? false,
+    oauth_min_remaining_percent: partial.oauth_min_remaining_percent ?? null,
+    oauth_use_credits: partial.oauth_use_credits ?? false,
     extension_values: partial.extension_values ?? [],
     custom_headers: partial.custom_headers ?? [],
   };
@@ -142,6 +144,8 @@ function makeInitialValues(
     stream_idle_timeout_seconds: partial.stream_idle_timeout_seconds ?? null,
     custom_headers: partial.custom_headers ?? [],
     supports_websockets: partial.supports_websockets ?? false,
+    oauth_min_remaining_percent: partial.oauth_min_remaining_percent ?? null,
+    oauth_use_credits: partial.oauth_use_credits ?? false,
   };
 }
 
@@ -460,6 +464,114 @@ describe("pages/providers/ProviderEditorDialog", () => {
         expect.objectContaining({ supportsWebsockets: false })
       )
     );
+  });
+
+  it.each([
+    ["codex", true, true],
+    ["claude", true, false],
+    ["gemini", false, false],
+    ["grok", false, false],
+  ] as const)(
+    "shows OAuth quota policy controls only for supported providers: %s",
+    (cliKey, hasThreshold, hasCreditOption) => {
+      render(
+        <ProviderEditorDialog
+          mode="create"
+          cliKey={cliKey}
+          initialValues={makeInitialValues({ auth_mode: "oauth" })}
+          open={true}
+          onSaved={vi.fn()}
+          onOpenChange={vi.fn()}
+        />
+      );
+      expect(screen.queryByLabelText("最低订阅剩余额度（%）") != null).toBe(hasThreshold);
+      expect(screen.queryByRole("switch", { name: "额度不足时使用点数" }) != null).toBe(
+        hasCreditOption
+      );
+      if (hasCreditOption) {
+        expect(screen.getByRole("switch", { name: "额度不足时使用点数" })).not.toBeChecked();
+      }
+      fireEvent.click(screen.getByRole("tab", { name: "API 密钥" }));
+      expect(screen.queryByLabelText("最低订阅剩余额度（%）")).not.toBeInTheDocument();
+      expect(screen.queryByRole("switch", { name: "额度不足时使用点数" })).not.toBeInTheDocument();
+    }
+  );
+
+  it("edits and clears OAuth quota policy without disabling the provider", async () => {
+    const provider = makeProvider({
+      cli_key: "codex",
+      auth_mode: "oauth",
+      oauth_min_remaining_percent: 12.5,
+      oauth_use_credits: false,
+    });
+    vi.mocked(providerOAuthStatus).mockResolvedValue(makeOAuthStatus({ connected: true }));
+    vi.mocked(providerUpsert).mockResolvedValue(provider);
+    render(
+      <ProviderEditorDialog
+        mode="edit"
+        provider={provider}
+        open={true}
+        onSaved={vi.fn()}
+        onOpenChange={vi.fn()}
+      />
+    );
+    const threshold = screen.getByLabelText("最低订阅剩余额度（%）");
+    const useCredits = screen.getByRole("switch", { name: "额度不足时使用点数" });
+    expect(threshold).toHaveValue(12.5);
+    expect(useCredits).not.toBeChecked();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "刷新 Token" })).toBeInTheDocument()
+    );
+
+    fireEvent.change(threshold, { target: { value: "101" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(toast).toHaveBeenCalledWith("最低订阅剩余额度必须为 0-100 之间的数字");
+    expect(providerUpsert).not.toHaveBeenCalled();
+
+    fireEvent.change(threshold, { target: { value: "25" } });
+    fireEvent.click(useCredits);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(providerUpsert).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          oauthMinRemainingPercent: 25,
+          oauthUseCredits: true,
+          enabled: true,
+        })
+      )
+    );
+
+    fireEvent.change(threshold, { target: { value: "" } });
+    fireEvent.click(useCredits);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(providerUpsert).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          oauthMinRemainingPercent: null,
+          oauthUseCredits: false,
+          enabled: true,
+        })
+      )
+    );
+  });
+
+  it("loads OAuth quota policy from duplicate initial values", () => {
+    render(
+      <ProviderEditorDialog
+        mode="create"
+        cliKey="codex"
+        initialValues={makeInitialValues({
+          auth_mode: "oauth",
+          oauth_min_remaining_percent: 20,
+          oauth_use_credits: true,
+        })}
+        open={true}
+        onSaved={vi.fn()}
+        onOpenChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText("最低订阅剩余额度（%）")).toHaveValue(20);
+    expect(screen.getByRole("switch", { name: "额度不足时使用点数" })).toBeChecked();
   });
 
   it("loads WebSocket capability from duplicate initial values and hides it for Claude", () => {
@@ -1869,6 +1981,10 @@ describe("pages/providers/ProviderEditorDialog", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     const onSaved = vi.fn();
@@ -1948,6 +2064,10 @@ describe("pages/providers/ProviderEditorDialog", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     const onSaved = vi.fn();
@@ -2185,6 +2305,10 @@ describe("pages/providers/ProviderEditorDialog", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     const onSaved = vi.fn();
@@ -2468,6 +2592,10 @@ describe("pages/providers/ProviderEditorDialog", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     const onSaved = vi.fn();

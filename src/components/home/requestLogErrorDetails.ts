@@ -44,7 +44,7 @@ export type AttemptFailureGroup = {
   // GW_UPSTREAM_TIMEOUT group (never derived from outcome strings).
   timeoutSecs: number | null;
   // Circuit attribution from gate-skip attempts: the error code that tripped
-  // the breaker (first seen) and the latest recovery point in the group.
+  // the breaker (only when every attempt agrees) and the latest recovery point.
   // Both degrade to null for logs without attribution (e.g. after restart).
   circuitTriggerErrorCode: string | null;
   circuitRecoverAtUnix: number | null;
@@ -153,9 +153,10 @@ export function buildAttemptFailureSummary(
     }
 
     const triggerErrorCode = asOptionalString(attempt.circuit_trigger_error_code);
-    if (triggerErrorCode && group.circuitTriggerErrorCode == null) {
-      group.circuitTriggerErrorCode = triggerErrorCode;
-    }
+    group.circuitTriggerErrorCode =
+      group.count === 1 || group.circuitTriggerErrorCode === triggerErrorCode
+        ? triggerErrorCode
+        : null;
     const recoverAtUnix = asFiniteNumber(attempt.circuit_recover_at_unix);
     if (recoverAtUnix != null) {
       group.circuitRecoverAtUnix =
@@ -340,7 +341,11 @@ export function resolveRequestLogErrorObservation(
     upstreamBodyPreview: parsedJson.upstreamBodyPreview,
     upstreamStatus:
       parsedJson.upstreamStatus ??
-      (selectedLog.status != null && selectedLog.status >= 400 ? selectedLog.status : null),
+      (parsedJson.errorCategory !== "local" &&
+      selectedLog.status != null &&
+      selectedLog.status >= 400
+        ? selectedLog.status
+        : null),
   };
 
   if (hasObservationSignal(observation)) {

@@ -150,6 +150,8 @@ pub(crate) enum IRStreamChunk {
     },
     /// Stream end marker.
     MessageStop,
+    /// Terminal upstream failure, preserving the machine-readable code.
+    Error { code: String, message: String },
     /// Keep-alive ping.
     Ping,
 }

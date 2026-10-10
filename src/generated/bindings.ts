@@ -3903,6 +3903,11 @@ export type ProviderModelPolicyV1 = {
   modelPatterns: string[];
   mappings: ProviderModelMapping[];
 };
+export type ProviderOAuthCreditBalance = {
+  has_credits: boolean;
+  unlimited: boolean;
+  balance: string | null;
+};
 export type ProviderOAuthDeviceCodeCancelResult = { cancelled: boolean };
 export type ProviderOAuthDeviceCodePollInput = {
   providerId: number;
@@ -3934,6 +3939,10 @@ export type ProviderOAuthLimitsResult = {
   limit_5h_reset_at: number | null;
   limit_weekly_reset_at: number | null;
   reset_credit_available_count: number | null;
+  credits: ProviderOAuthCreditBalance | null;
+  limit_5h_remaining_percent: number | null;
+  limit_weekly_remaining_percent: number | null;
+  routing_limited: boolean;
 };
 export type ProviderOAuthRefreshResult = { success: boolean; expires_at: number | null };
 export type ProviderOAuthResetCodexQuotaResult = {
@@ -3976,6 +3985,8 @@ export type ProviderSummary = {
   limit_weekly_usd: number | null;
   limit_monthly_usd: number | null;
   limit_total_usd: number | null;
+  oauth_min_remaining_percent: number | null;
+  oauth_use_credits: boolean;
   tags: string[];
   note: string;
   created_at: number;
@@ -4013,6 +4024,8 @@ export type ProviderUpsertInput = {
   limitWeeklyUsd: number | null;
   limitMonthlyUsd: number | null;
   limitTotalUsd: number | null;
+  oauthMinRemainingPercent: number | null;
+  oauthUseCredits?: boolean;
   tags: string[] | null;
   note: string | null;
   sourceProviderId: number | null;

@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::failover::FailoverDecision;
 use super::{ErrorCategory, GatewayErrorCode};
@@ -17,14 +17,51 @@ use std::sync::Arc;
 
 const MAX_PLUGIN_ERROR_BODY_BYTES: usize = 256 * 1024;
 
-#[derive(Debug, Serialize)]
-struct GatewayErrorResponse {
-    trace_id: String,
-    error_code: &'static str,
-    message: String,
-    attempts: Vec<FailoverAttempt>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::gateway) struct GatewayFailure {
+    #[serde(skip)]
+    pub(in crate::gateway) status: StatusCode,
+    pub(in crate::gateway) trace_id: String,
+    pub(in crate::gateway) error_code: String,
+    pub(in crate::gateway) message: String,
+    pub(in crate::gateway) attempts: Vec<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    retry_after_seconds: Option<u64>,
+    pub(in crate::gateway) retry_after_seconds: Option<u64>,
+}
+
+impl GatewayFailure {
+    pub(in crate::gateway) fn into_response(self) -> Response {
+        let mut response = (self.status, Json(&self)).into_response();
+        if let Ok(value) = HeaderValue::from_str(&self.trace_id) {
+            response.headers_mut().insert("x-trace-id", value);
+        }
+        if let Some(seconds) = self.retry_after_seconds.filter(|value| *value > 0) {
+            response.headers_mut().insert(
+                header::RETRY_AFTER,
+                HeaderValue::from_str(&seconds.to_string()).expect("numeric Retry-After"),
+            );
+        }
+        response.extensions_mut().insert(self);
+        response
+    }
+
+    /// Retain only small, known unavailable results; attempts remain in the trace log.
+    pub(in crate::gateway) fn unavailable_summary(&self) -> Option<Self> {
+        if self.status != StatusCode::SERVICE_UNAVAILABLE
+            || !matches!(
+                self.error_code.as_str(),
+                "GW_ALL_PROVIDERS_UNAVAILABLE" | "GW_NO_ENABLED_PROVIDER"
+            )
+            || self.message.len() > 8 * 1024
+            || self.trace_id.len() > 512
+        {
+            return None;
+        }
+        let mut summary = self.clone();
+        summary.attempts.clear();
+        Some(summary)
+    }
 }
 
 pub(super) fn classify_reqwest_error(err: &reqwest::Error) -> (ErrorCategory, &'static str) {
@@ -114,28 +151,18 @@ pub(super) fn error_response_with_retry_after(
     attempts: Vec<FailoverAttempt>,
     retry_after_seconds: Option<u64>,
 ) -> Response {
-    let payload = GatewayErrorResponse {
-        trace_id: trace_id.clone(),
-        error_code,
+    GatewayFailure {
+        status,
+        trace_id,
+        error_code: error_code.to_owned(),
         message,
-        attempts,
+        attempts: attempts
+            .iter()
+            .map(|attempt| serde_json::to_value(attempt).expect("serializable attempt"))
+            .collect(),
         retry_after_seconds,
-    };
-
-    let mut resp = (status, Json(payload)).into_response();
-
-    if let Ok(v) = HeaderValue::from_str(&trace_id) {
-        resp.headers_mut().insert("x-trace-id", v);
     }
-
-    if let Some(seconds) = retry_after_seconds.filter(|v| *v > 0) {
-        let value = seconds.to_string();
-        if let Ok(v) = HeaderValue::from_str(&value) {
-            resp.headers_mut().insert(header::RETRY_AFTER, v);
-        }
-    }
-
-    resp
+    .into_response()
 }
 
 pub(super) async fn apply_gateway_error_hook(
@@ -144,9 +171,10 @@ pub(super) async fn apply_gateway_error_hook(
     trace_id: String,
     response: Response,
 ) -> Response {
-    let status = response.status();
-    let mut headers = response.headers().clone();
-    let body = match to_bytes(response.into_body(), MAX_PLUGIN_ERROR_BODY_BYTES).await {
+    let (mut parts, response_body) = response.into_parts();
+    let status = parts.status;
+    let mut headers = parts.headers.clone();
+    let body = match to_bytes(response_body, MAX_PLUGIN_ERROR_BODY_BYTES).await {
         Ok(body) => body,
         Err(err) => {
             tracing::warn!(
@@ -192,21 +220,7 @@ pub(super) async fn apply_gateway_error_hook(
                 error = %err,
                 "plugin gateway.error hook failed; keeping original error response"
             );
-            let mut builder = Response::builder().status(status);
-            for (name, value) in headers.iter() {
-                builder = builder.header(name, value);
-            }
-            return builder
-                .body(axum::body::Body::from(body))
-                .unwrap_or_else(|_| {
-                    error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        trace_id,
-                        GatewayErrorCode::ResponseBuildError.as_str(),
-                        "failed to rebuild gateway error response".to_string(),
-                        vec![],
-                    )
-                });
+            return Response::from_parts(parts, axum::body::Body::from(body));
         }
     };
 
@@ -228,23 +242,19 @@ pub(super) async fn apply_gateway_error_hook(
 
     headers = output.headers;
     headers.remove(header::CONTENT_LENGTH);
-    let mut builder = Response::builder().status(status);
-    for (name, value) in headers.iter() {
-        builder = builder.header(name, value);
+    // Only AIO's standard DTO participates in protocol adaptation/result reuse.
+    // Native and custom plugin bodies keep their own contract.
+    if parts.extensions.remove::<GatewayFailure>().is_some() {
+        if let Ok(mut failure) = serde_json::from_slice::<GatewayFailure>(&output.body) {
+            failure.status = status;
+            parts.extensions.insert(failure);
+        }
     }
-    builder
-        .body(axum::body::Body::from(Bytes::copy_from_slice(
-            output.body.as_ref(),
-        )))
-        .unwrap_or_else(|_| {
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                trace_id,
-                GatewayErrorCode::ResponseBuildError.as_str(),
-                "failed to rebuild gateway error response".to_string(),
-                vec![],
-            )
-        })
+    parts.headers = headers;
+    Response::from_parts(
+        parts,
+        axum::body::Body::from(Bytes::copy_from_slice(output.body.as_ref())),
+    )
 }
 
 #[cfg(test)]

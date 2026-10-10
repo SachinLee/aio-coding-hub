@@ -32,7 +32,9 @@ pub(crate) use types::{
     validate_custom_headers_owner,
 };
 
-pub(crate) use validation::{normalize_base_urls, validate_supports_websockets};
+pub(crate) use validation::{
+    normalize_base_urls, validate_oauth_min_remaining_percent, validate_supports_websockets,
+};
 
 pub(crate) use queries::{
     active_sort_mode_id_for_gateway, claude_terminal_launch_context, clear_oauth, cli_key_by_id,

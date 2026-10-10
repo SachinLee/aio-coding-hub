@@ -1,5 +1,6 @@
 //! Usage: In-memory caches for gateway proxy behavior (error dedupe, base_url latency picks).
 
+use super::GatewayErrorCode;
 use axum::http::StatusCode;
 use std::collections::HashMap;
 
@@ -81,6 +82,14 @@ impl RecentErrorCache {
         let count = self.errors.len();
         self.errors.clear();
         count
+    }
+
+    pub(in crate::gateway) fn clear_unavailable(&mut self) -> usize {
+        let before = self.errors.len();
+        self.errors.retain(|_, entry| {
+            entry.error_code != GatewayErrorCode::AllProvidersUnavailable.as_str()
+        });
+        before - self.errors.len()
     }
 
     fn prune_expired(&mut self, now_unix: i64) {
@@ -251,6 +260,24 @@ mod tests {
 
         let second_read = cache.get_error(110, 12, "fp-correct");
         assert!(second_read.is_none());
+    }
+
+    #[test]
+    fn clear_unavailable_keeps_other_cached_errors() {
+        let mut cache = RecentErrorCache::default();
+        cache.insert_error(100, 1, cached_error(280, "quota-route"));
+        cache.insert_error(100, 2, cached_error(280, "bridge-route"));
+        let mut other = cached_error(280, "other-route");
+        other.error_code = "GW_UPSTREAM_ALL_FAILED";
+        cache.insert_error(100, 3, other);
+        assert_eq!(cache.clear_unavailable(), 2);
+        assert!(cache.get_error(100, 1, "quota-route").is_none());
+        assert!(cache.get_error(100, 2, "bridge-route").is_none());
+        assert_eq!(
+            cache.get_error(100, 3, "other-route").unwrap().error_code,
+            "GW_UPSTREAM_ALL_FAILED"
+        );
+        assert_eq!(cache.clear_unavailable(), 0);
     }
 
     #[test]

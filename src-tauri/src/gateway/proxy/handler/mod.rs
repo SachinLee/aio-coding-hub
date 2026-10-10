@@ -286,8 +286,6 @@ where
         providers: vec![],
         session_bound_provider_id: None,
         forced_provider_id,
-        fingerprint_key: 0,
-        fingerprint_debug: String::new(),
         unavailable_fingerprint_key: 0,
         unavailable_fingerprint_debug: String::new(),
     };
@@ -311,6 +309,27 @@ where
         MiddlewareAction::ShortCircuit(resp) => return resp,
     };
 
+    let request = ctx.ws_request.clone();
+    let response = proxy_after_body(ctx).await;
+    if let Some(request) = &request {
+        if let Some(failure) = response.extensions().get::<super::GatewayFailure>() {
+            request
+                .connection
+                .runtime
+                .remember_failure(request, failure);
+        }
+        if !response.status().is_success() {
+            request.connection.runtime.finish_generation(request, false);
+        }
+    }
+    response
+}
+
+async fn proxy_after_body<R>(ctx: ProxyContext<R>) -> Response
+where
+    R: tauri::Runtime + 'static,
+    R::Handle: Unpin,
+{
     // 4. Codex request-origin classification.
     let ctx = match CodexRequestClassifierMiddleware::run(ctx) {
         MiddlewareAction::Continue(ctx) => *ctx,
@@ -370,17 +389,6 @@ where
         MiddlewareAction::Continue(ctx) => *ctx,
         MiddlewareAction::ShortCircuit(resp) => return resp,
     };
-
-    let mut ctx = ctx;
-    if ctx.ws_connection.is_some()
-        && ctx
-            .introspection_json
-            .as_ref()
-            .is_some_and(|body| body.get("generate") == Some(&serde_json::Value::Bool(false)))
-    {
-        ctx.observe_request = false;
-        ctx.provider_health_neutral = true;
-    }
 
     // --- Post-chain: emit start event, seed in-progress log, then forward ---
     // 顺序契约：先武装 abort guard，再登记活跃注册表，之后才允许出现 await。
@@ -578,8 +586,6 @@ mod tests {
             providers: vec![],
             session_bound_provider_id: None,
             forced_provider_id: None,
-            fingerprint_key: 0,
-            fingerprint_debug: String::new(),
             unavailable_fingerprint_key: 0,
             unavailable_fingerprint_debug: String::new(),
         };
@@ -644,8 +650,6 @@ mod tests {
             providers: vec![],
             session_bound_provider_id: None,
             forced_provider_id: None,
-            fingerprint_key: 0,
-            fingerprint_debug: String::new(),
             unavailable_fingerprint_key: 0,
             unavailable_fingerprint_debug: String::new(),
         };
@@ -701,8 +705,6 @@ mod tests {
             providers: vec![],
             session_bound_provider_id: None,
             forced_provider_id: None,
-            fingerprint_key: 0,
-            fingerprint_debug: String::new(),
             unavailable_fingerprint_key: 0,
             unavailable_fingerprint_debug: String::new(),
         }
@@ -1328,43 +1330,16 @@ mod tests {
     }
 
     #[test]
-    fn request_fingerprint_ignores_session_when_idempotency_key_present() {
-        let mut headers = HeaderMap::new();
-        headers.insert("idempotency-key", HeaderValue::from_static("idem-123"));
-        let body = Bytes::from_static(br#"{"model":"claude-3-5-sonnet"}"#);
-
-        let left = build_request_fingerprints(
-            "claude",
-            Some(11),
-            "POST",
-            "/v1/messages",
-            Some("stream=true&model=claude-3-5-sonnet"),
-            Some("session-a"),
-            Some("claude-3-5-sonnet"),
-            &headers,
-            &body,
-        );
-        let right = build_request_fingerprints(
-            "claude",
-            Some(11),
-            "POST",
-            "/v1/messages",
-            Some("model=claude-3-5-sonnet&stream=true"),
-            Some("session-b"),
-            Some("claude-3-5-sonnet"),
-            &headers,
-            &body,
-        );
-
-        assert_eq!(left.fingerprint_key, right.fingerprint_key);
-        assert_eq!(left.fingerprint_debug, right.fingerprint_debug);
+    fn unavailable_fingerprint_uses_candidate_set_not_preference_order() {
+        let fingerprint =
+            |ids: &[i64]| build_request_fingerprints("codex", None, "POST", "/v1/responses", ids);
         assert_eq!(
-            left.unavailable_fingerprint_key,
-            right.unavailable_fingerprint_key
+            fingerprint(&[1, 2]).unavailable_fingerprint_key,
+            fingerprint(&[2, 1]).unavailable_fingerprint_key
         );
-        assert_eq!(
-            left.unavailable_fingerprint_debug,
-            right.unavailable_fingerprint_debug
+        assert_ne!(
+            fingerprint(&[1]).unavailable_fingerprint_key,
+            fingerprint(&[1, 2]).unavailable_fingerprint_key
         );
     }
 }

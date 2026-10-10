@@ -412,6 +412,7 @@ pub struct SseUsageTracker {
     completion_seen: bool,
     terminal_error_seen: bool,
     fake_200_detected: bool,
+    fake_200_quota_exhausted: bool,
     fake_200_reason: Option<SseFake200Reason>,
 }
 
@@ -652,6 +653,7 @@ impl SseUsageTracker {
             completion_seen: false,
             terminal_error_seen: false,
             fake_200_detected: false,
+            fake_200_quota_exhausted: false,
             fake_200_reason: None,
         }
     }
@@ -666,6 +668,10 @@ impl SseUsageTracker {
 
     pub fn fake_200_detected(&self) -> bool {
         self.fake_200_detected
+    }
+
+    pub fn fake_200_quota_exhausted(&self) -> bool {
+        self.fake_200_quota_exhausted
     }
 
     pub fn fake_200_reason(&self) -> Option<SseFake200Reason> {
@@ -755,7 +761,12 @@ impl SseUsageTracker {
         let Ok(data) = serde_json::from_slice::<Value>(trimmed) else {
             return;
         };
+        let was_fake_200 = self.fake_200_detected;
         self.detect_openai_event_error(b"message", &data, trimmed.len());
+        if !was_fake_200 && self.fake_200_detected {
+            self.fake_200_quota_exhausted =
+                crate::shared::upstream_quota::match_quota_exhausted(trimmed);
+        }
     }
 
     fn append_pending_line_fragment(&mut self, fragment: &[u8]) -> bool {
@@ -876,7 +887,12 @@ impl SseUsageTracker {
             }
         };
 
+        let was_fake_200 = self.fake_200_detected;
         self.ingest_event(&event_name, &data_json, self.current_data.len());
+        if !was_fake_200 && self.fake_200_detected {
+            self.fake_200_quota_exhausted =
+                crate::shared::upstream_quota::match_quota_exhausted(&self.current_data);
+        }
         self.current_event.clear();
         self.current_data.clear();
     }

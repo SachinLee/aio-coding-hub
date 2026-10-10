@@ -2,7 +2,7 @@ import type { CliKey, OAuthLimitsResult } from "../../services/providers/provide
 import { cn } from "../../utils/cn";
 
 export type OAuthQuotaUsageSegment = {
-  key: "short" | "weekly" | "resetCredit";
+  key: "short" | "weekly" | "credits" | "resetCredit";
   text: string;
   title: string;
   resetCreditCount?: number;
@@ -70,6 +70,23 @@ function buildOAuthQuotaUsageSegments({
       title: weeklyReset
         ? `周用量: ${limits.limit_weekly_text}，重置时间: ${weeklyReset}`
         : `周用量: ${limits.limit_weekly_text}`,
+    });
+  }
+
+  if (cliKey === "codex" && limits.credits != null) {
+    const { has_credits, unlimited } = limits.credits;
+    const balance = limits.credits.balance?.trim();
+    const creditText = unlimited
+      ? "无限"
+      : !has_credits
+        ? "0"
+        : balance && /^\d+(?:\.\d+)?$/.test(balance)
+          ? balance
+          : "可用";
+    segments.push({
+      key: "credits",
+      text: `可用点数: ${creditText}`,
+      title: `Codex 可用点数: ${creditText}`,
     });
   }
 

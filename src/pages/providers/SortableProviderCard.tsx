@@ -23,6 +23,7 @@ import {
 } from "../../query/providers";
 import {
   getProviderTypeInfo,
+  hasInsufficientOAuthQuota,
   type ClaudeModels,
   type ProviderSummary,
 } from "../../services/providers/providers";
@@ -204,11 +205,12 @@ const ProviderCard = memo(function ProviderCard({
   const [resettingCodexQuota, setResettingCodexQuota] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const { data: oauthLimits = null, isLoading: limitsQueryLoading } = useOAuthLimitsQuery(
-    provider.id,
-    isOAuth
-  );
-  const limitsLoading = limitsQueryLoading || limitsRefreshing;
+  const {
+    data: oauthLimits = null,
+    isFetching: limitsQueryFetching,
+    isError: limitsQueryError,
+  } = useOAuthLimitsQuery(provider.id, isOAuth);
+  const limitsLoading = limitsQueryFetching || limitsRefreshing;
   const shouldTrackNowUnix =
     isUnavailable ||
     (isOAuth &&
@@ -450,6 +452,17 @@ const ProviderCard = memo(function ProviderCard({
                         : undefined
                     }
                   />
+                  {limitsQueryError ? (
+                    <span role="status" className="text-xs text-destructive">
+                      {oauthLimits
+                        ? "刷新失败，额度状态未知（显示上次数据）"
+                        : "刷新失败，额度状态未知"}
+                    </span>
+                  ) : hasInsufficientOAuthQuota(oauthLimits) ? (
+                    <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                      配额保护中
+                    </span>
+                  ) : null}
                   {resetError ? (
                     <span className="shrink-0 text-xs text-rose-600 dark:text-rose-400">
                       {resetError}

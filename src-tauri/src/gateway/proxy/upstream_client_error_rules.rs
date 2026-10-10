@@ -83,31 +83,7 @@ pub(super) fn match_429_concurrency_limit(body: &[u8]) -> bool {
     has_direct_phrase || has_structured_fields
 }
 
-/// Returns whether a response body clearly indicates account/provider quota exhaustion.
-pub(in crate::gateway) fn match_quota_exhausted(body: &[u8]) -> bool {
-    if body.is_empty() {
-        return false;
-    }
-
-    let scan = if body.len() > MAX_SCAN_BYTES {
-        &body[..MAX_SCAN_BYTES]
-    } else {
-        body
-    };
-
-    let haystack_lower = String::from_utf8_lossy(scan).to_ascii_lowercase();
-
-    haystack_lower.contains("insufficient_quota")
-        || haystack_lower.contains("quota exhausted")
-        || haystack_lower.contains("resource_exhausted")
-        || haystack_lower.contains("exceeded your current quota")
-        || haystack_lower.contains("you exceeded your current quota")
-        || (haystack_lower.contains("quota") && haystack_lower.contains("exceeded"))
-        || (haystack_lower.contains("quota") && haystack_lower.contains("exhausted"))
-        || (haystack_lower.contains("rate limit") && haystack_lower.contains("exceeded"))
-        || (haystack_lower.contains("rate_limit") && haystack_lower.contains("exceeded"))
-        || (haystack_lower.contains("usage limit") && haystack_lower.contains("reached"))
-}
+pub(in crate::gateway) use crate::shared::upstream_quota::match_quota_exhausted;
 
 struct Rule {
     id: &'static str,
@@ -356,11 +332,19 @@ mod tests {
             b"You exceeded your current quota, please check your plan and billing details"
         ));
         assert!(match_quota_exhausted(
-            b"Rate limit exceeded for this account"
-        ));
-        assert!(match_quota_exhausted(
             b"RESOURCE_EXHAUSTED: Resource has been exhausted (e.g. check quota)."
         ));
+        for error in [
+            r#"{"code":"rate_limit_exceeded","type":"usage_limit_reached","message":"The usage limit has been reached"}"#,
+            r#"{"code":"insufficient_quota","type":"rate_limit_error","message":"Request failed"}"#,
+            r#"{"code":"quota_exhausted","type":"rate_limit_exceeded","message":"Request failed"}"#,
+            r#"{"type":"rate_limit_error","message":"quota exhausted"}"#,
+        ] {
+            assert!(
+                match_quota_exhausted(format!(r#"{{"error":{error}}}"#).as_bytes()),
+                "{error}"
+            );
+        }
     }
 
     #[test]
@@ -369,6 +353,16 @@ mod tests {
             b"{\"error\":\"rate limit\",\"message\":\"too many requests per minute\"}"
         ));
         assert!(!match_quota_exhausted(b"concurrency limit exceeded"));
+        assert!(!match_quota_exhausted(
+            b"Rate limit exceeded for this account"
+        ));
+        assert!(!match_quota_exhausted(br#"{"error":{"code":"rate_limit_exceeded","message":"Token quota exceeded. Try again in 20 seconds."}}"#));
+        assert!(!match_quota_exhausted(
+            br#"{"error":{"type":"rate_limit_error","message":"Rate limit exceeded"}}"#
+        ));
+        assert!(!match_quota_exhausted(
+            br#"{"error":{"status":"RESOURCE_EXHAUSTED","message":"Too many requests"}}"#
+        ));
     }
 
     #[test]

@@ -165,6 +165,7 @@ describe("components/home/RequestLogErrorObservationCard", () => {
     const groupLine = screen.getByText(/供应商熔断 ×2/);
     expect(groupLine).toHaveTextContent("供应商熔断 ×2（Provider A、Provider B）");
     expect(groupLine).toHaveTextContent("触发：上游超时");
+    expect(groupLine).toHaveTextContent("本组最后预计恢复：");
     expect(groupLine).toHaveTextContent(/约 \d+ 分钟后/);
   });
 

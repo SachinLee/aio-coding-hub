@@ -149,30 +149,13 @@ impl OAuthProvider for CodexOAuthProvider {
         let token = access_token.to_string();
         let client = client.clone();
         Box::pin(async move {
-            let resp = client
-                .get("https://chatgpt.com/backend-api/wham/usage")
-                .header("Authorization", format!("Bearer {}", token))
-                .header(
-                    "User-Agent",
-                    format!(
-                        "{} (Debian 13.0.0; x86_64) WindowsTerminal",
-                        crate::gateway::oauth::DEFAULT_OAUTH_USER_AGENT
-                    ),
-                )
-                .header("Content-Type", "application/json")
-                .send()
-                .await
-                .map_err(|e| format!("codex limits fetch failed: {e}"))?;
-
-            if !resp.status().is_success() {
-                return Err(format!("codex limits fetch status: {}", resp.status()));
-            }
-
-            let body = read_text_with_limit(resp, CODEX_LIMITS_RESPONSE_BODY_LIMIT, "codex limits")
-                .await
-                .map_err(|e| format!("codex limits body read failed: {e}"))?;
-            let json: serde_json::Value = serde_json::from_str(&body)
-                .map_err(|e| format!("codex limits parse failed: {e}"))?;
+            let json = fetch_codex_usage_payload(
+                &client,
+                CODEX_USAGE_URL,
+                &token,
+                parse_chatgpt_account_id(Some(&token)).as_deref(),
+            )
+            .await?;
 
             Ok(OAuthLimitsResult {
                 raw_json: Some(json),
@@ -180,6 +163,53 @@ impl OAuthProvider for CodexOAuthProvider {
             })
         })
     }
+}
+
+pub(crate) const CODEX_USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
+
+pub(crate) fn apply_codex_quota_headers(
+    request: reqwest::RequestBuilder,
+    access_token: &str,
+    chatgpt_account_id: Option<&str>,
+) -> reqwest::RequestBuilder {
+    let request = request
+        .header("authorization", format!("Bearer {access_token}"))
+        .header("accept", "application/json")
+        .header("content-type", "application/json")
+        .header("oai-language", "zh-CN")
+        .header("originator", upstream_identity::CODEX_CLI_ORIGINATOR)
+        .header("user-agent", upstream_identity::CODEX_CLI_USER_AGENT);
+    match chatgpt_account_id
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    {
+        Some(id) => request.header("chatgpt-account-id", id),
+        None => request,
+    }
+}
+
+pub(crate) async fn fetch_codex_usage_payload(
+    client: &reqwest::Client,
+    usage_url: &str,
+    access_token: &str,
+    chatgpt_account_id: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let response =
+        apply_codex_quota_headers(client.get(usage_url), access_token, chatgpt_account_id)
+            .send()
+            .await
+            .map_err(|e| format!("codex usage fetch failed: {e}"))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = read_text_with_limit(response, 64 * 1024, "codex usage")
+            .await
+            .unwrap_or_default();
+        return Err(format!("codex usage fetch status: {status} - {text}"));
+    }
+    let body = read_text_with_limit(response, CODEX_LIMITS_RESPONSE_BODY_LIMIT, "codex usage")
+        .await
+        .map_err(|e| format!("codex usage body read failed: {e}"))?;
+    serde_json::from_str(&body).map_err(|e| format!("codex usage parse failed: {e}"))
 }
 
 pub(crate) fn parse_chatgpt_account_id(id_token: Option<&str>) -> Option<String> {

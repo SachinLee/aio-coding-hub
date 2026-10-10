@@ -208,6 +208,8 @@ export function useProviderEditorEffects(d: EffectDeps) {
       name: snapshot.name,
       api_key: "",
       auth_mode: initialAuthMode === "cx2cc" ? "api_key" : initialAuthMode,
+      oauth_min_remaining_percent: valueOrEmpty(snapshot.oauth_min_remaining_percent),
+      oauth_use_credits: snapshot.oauth_use_credits,
       cost_multiplier: String(snapshot.cost_multiplier ?? 1.0),
       limit_5h_usd: snapshot.limit_5h_usd != null ? String(snapshot.limit_5h_usd) : "",
       limit_daily_usd: snapshot.limit_daily_usd != null ? String(snapshot.limit_daily_usd) : "",

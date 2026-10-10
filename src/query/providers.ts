@@ -108,6 +108,10 @@ const EMPTY_OAUTH_LIMITS_RESULT: OAuthLimitsResult = {
   limit_5h_reset_at: null,
   limit_weekly_reset_at: null,
   reset_credit_available_count: null,
+  credits: null,
+  limit_5h_remaining_percent: null,
+  limit_weekly_remaining_percent: null,
+  routing_limited: false,
 };
 
 export function normalizeProviderOAuthLimitsResult(
@@ -115,6 +119,15 @@ export function normalizeProviderOAuthLimitsResult(
 ): OAuthLimitsResult {
   if (!result) return EMPTY_OAUTH_LIMITS_RESULT;
   return result;
+}
+
+function oauthLimitsQueryOptions(providerId: number) {
+  const normalizedProviderId = validateProviderId(providerId);
+  return {
+    queryKey: oauthLimitsKeys.detail(normalizedProviderId),
+    queryFn: async () =>
+      normalizeProviderOAuthLimitsResult(await providerOAuthFetchLimits(normalizedProviderId)),
+  };
 }
 
 export function readProviderOAuthLimitsCache(
@@ -134,10 +147,10 @@ export async function refreshProviderOAuthLimits(
   options?: { resetCircuitAfterRefresh?: boolean }
 ): Promise<OAuthLimitsResult> {
   const normalizedProviderId = validateProviderId(providerId);
-  const next = normalizeProviderOAuthLimitsResult(
-    await providerOAuthFetchLimits(normalizedProviderId)
-  );
-  queryClient.setQueryData(oauthLimitsKeys.detail(normalizedProviderId), next);
+  const next = await queryClient.fetchQuery({
+    ...oauthLimitsQueryOptions(normalizedProviderId),
+    staleTime: 0,
+  });
   try {
     if (options?.resetCircuitAfterRefresh) {
       try {
@@ -229,6 +242,7 @@ export function useProviderUpsertMutation() {
       );
 
       void queryClient.invalidateQueries({ queryKey: providersKeys.list(saved.cli_key) });
+      void queryClient.invalidateQueries({ queryKey: oauthLimitsKeys.detail(saved.id) });
       void queryClient.invalidateQueries({ queryKey: gatewayKeys.circuitStatus(saved.cli_key) });
     },
   });
@@ -415,15 +429,8 @@ export function useProviderClaudeTerminalLaunchCommandMutation() {
 }
 
 export function useOAuthLimitsQuery(providerId: number, enabled: boolean) {
-  const normalizedProviderId = validateProviderId(providerId);
-
   return useQuery({
-    queryKey: oauthLimitsKeys.detail(normalizedProviderId),
-    queryFn: async (): Promise<OAuthLimitsResult> => {
-      return normalizeProviderOAuthLimitsResult(
-        await providerOAuthFetchLimits(normalizedProviderId)
-      );
-    },
+    ...oauthLimitsQueryOptions(providerId),
     enabled,
     staleTime: 180_000,
     refetchInterval: 180_000,

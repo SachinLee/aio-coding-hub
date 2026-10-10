@@ -74,6 +74,8 @@ function makeProvider(
     },
     stream_idle_timeout_seconds: partial.stream_idle_timeout_seconds ?? null,
     supports_websockets: partial.supports_websockets ?? false,
+    oauth_min_remaining_percent: partial.oauth_min_remaining_percent ?? null,
+    oauth_use_credits: partial.oauth_use_credits ?? false,
     extension_values: partial.extension_values ?? [],
     custom_headers: partial.custom_headers ?? [],
     api_key_configured: partial.api_key_configured ?? false,
@@ -170,6 +172,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 3,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: { has_credits: true, unlimited: false, balance: "62500" },
     });
     const wrapper = createQueryWrapper(client);
 
@@ -181,6 +187,7 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
     await waitFor(() => expect(result.current.oauthQuotaRows[0]?.state).toBe("success"));
     expect(providerOAuthFetchLimits).not.toHaveBeenCalled();
     expect(result.current.oauthQuotaRows[0]?.limits?.limit_5h_text).toBe("61%");
+    expect(result.current.oauthQuotaRows[0]?.limits?.credits?.balance).toBe("62500");
   });
 
   it("refreshes OAuth limits manually and writes the result into cache", async () => {
@@ -193,6 +200,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 2,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     const { result } = renderHook(
@@ -216,6 +227,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 2,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
   });
 
@@ -253,6 +268,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: providerId === 11 ? 2 : null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     }));
 
     const { result } = renderHook(
@@ -277,6 +296,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
   });
 
@@ -311,6 +334,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: null,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     });
 
     const { result } = renderHook(
@@ -361,6 +388,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 1,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     const oldB = {
       limit_short_label: "5h",
@@ -369,6 +400,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 5,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     const refreshedA = {
       limit_short_label: "5h",
@@ -377,6 +412,10 @@ describe("pages/home/hooks/useHomeOAuthQuota", () => {
       limit_5h_reset_at: null,
       limit_weekly_reset_at: null,
       reset_credit_available_count: 0,
+      limit_5h_remaining_percent: null,
+      limit_weekly_remaining_percent: null,
+      routing_limited: false,
+      credits: null,
     };
     client.setQueryData(oauthLimitsKeys.detail(11), oldA);
     client.setQueryData(oauthLimitsKeys.detail(12), oldB);

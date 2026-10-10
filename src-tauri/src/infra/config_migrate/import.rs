@@ -77,6 +77,8 @@ pub(super) fn import_into_transaction(
             limit_weekly_usd,
             limit_monthly_usd,
             limit_total_usd,
+            oauth_min_remaining_percent,
+            oauth_use_credits,
             daily_reset_mode,
             daily_reset_time,
             tags_json,
@@ -93,6 +95,8 @@ pub(super) fn import_into_transaction(
             supports_websockets,
         )?;
 
+        let oauth_min_remaining_percent =
+            crate::providers::validate_oauth_min_remaining_percent(oauth_min_remaining_percent)?;
         let custom_headers = crate::providers::normalize_custom_headers(custom_headers)?;
         crate::providers::validate_custom_headers_owner(
             &custom_headers,
@@ -160,8 +164,10 @@ INSERT INTO providers(
   supports_websockets,
   created_at,
   updated_at,
-  custom_headers_json
-) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, NULL, ?37, ?38, ?39, ?39, ?40)
+  custom_headers_json,
+  oauth_min_remaining_percent,
+  oauth_use_credits
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, NULL, ?37, ?38, ?39, ?39, ?40, ?41, ?42)
 "#,
             params![
                 cli_key,
@@ -204,6 +210,8 @@ INSERT INTO providers(
                 bool_to_int(supports_websockets),
                 now,
                 custom_headers_json,
+                oauth_min_remaining_percent,
+                oauth_use_credits,
             ],
         )
         .map_err(|e| db_err!("failed to insert provider: {e}"))?;
