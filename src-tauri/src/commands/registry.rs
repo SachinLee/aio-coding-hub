@@ -139,6 +139,7 @@ macro_rules! generated_command_registry {
             model_catalog_export_default_provider => crate::commands::model_catalog::model_catalog_export_default_provider,
             model_catalog_export_pi => crate::commands::model_catalog::model_catalog_export_pi,
             model_catalog_export_opencode => crate::commands::model_catalog::model_catalog_export_opencode,
+            model_catalog_export_omp => crate::commands::model_catalog::model_catalog_export_omp,
             model_prices_list_all => crate::commands::model_prices::model_prices_list_all,
             model_price_upsert => crate::commands::model_prices::model_price_upsert,
             model_prices_sync => crate::commands::model_prices::model_prices_sync,

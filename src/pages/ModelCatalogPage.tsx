@@ -182,6 +182,16 @@ export function ModelCatalogPage() {
             >
               刷新 OpenCode
             </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-9"
+              title="把当前目录中已启用的模型同步到 ~/.omp/agent/models.yml"
+              onClick={() => setExportTarget("omp")}
+            >
+              同步到 OMP
+            </Button>
           </div>
         }
       />

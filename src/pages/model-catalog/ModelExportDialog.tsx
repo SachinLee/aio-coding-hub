@@ -1,11 +1,12 @@
 // Usage: Prompt for a provider name and export the current CLI's catalog models
-// into Pi or OpenCode config.
+// into Pi, OpenCode, or OMP config.
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   modelCatalogExportDefaultProvider,
   modelCatalogExportOpencode,
+  modelCatalogExportOmp,
   modelCatalogExportPi,
   type CliModelExportResult,
 } from "../../services/modelCatalog/modelCatalog";
@@ -14,7 +15,7 @@ import { Dialog } from "../../ui/Dialog";
 import { Button } from "../../ui/Button";
 import { Input } from "../../ui/Input";
 
-export type ExportTarget = "pi" | "opencode";
+export type ExportTarget = "pi" | "opencode" | "omp";
 
 export type ModelExportDialogProps = {
   open: boolean;
@@ -26,6 +27,7 @@ export type ModelExportDialogProps = {
 const TARGET_LABEL: Record<ExportTarget, string> = {
   pi: "Pi",
   opencode: "OpenCode",
+  omp: "OMP",
 };
 
 export function ModelExportDialog({ open, cliKey, target, onClose }: ModelExportDialogProps) {
@@ -52,7 +54,9 @@ export function ModelExportDialog({ open, cliKey, target, onClose }: ModelExport
       const result: CliModelExportResult =
         target === "pi"
           ? await modelCatalogExportPi(cliKey, name)
-          : await modelCatalogExportOpencode(cliKey, name);
+          : target === "opencode"
+            ? await modelCatalogExportOpencode(cliKey, name)
+            : await modelCatalogExportOmp(cliKey, name);
       const action = result.created ? "已新建供应商并写入" : "已更新";
       const count = result.models.length;
       toast(
@@ -62,7 +66,7 @@ export function ModelExportDialog({ open, cliKey, target, onClose }: ModelExport
       );
       onClose();
     } catch (error) {
-      toast(`刷新 ${TARGET_LABEL[target]} 模型列表失败：${String(error)}`);
+      toast(`同步到 ${TARGET_LABEL[target]} 失败：${String(error)}`);
     } finally {
       setRunning(false);
     }
@@ -71,8 +75,8 @@ export function ModelExportDialog({ open, cliKey, target, onClose }: ModelExport
   return (
     <Dialog
       open={open}
-      title={`刷新 ${TARGET_LABEL[target]} 模型列表`}
-      description={`把当前 ${cliKey} 目录中属于该供应商的模型写入 ${TARGET_LABEL[target]} 配置`}
+      title={`同步到 ${TARGET_LABEL[target]}`}
+      description={`把当前 ${cliKey} 目录中已启用的模型同步到 ${TARGET_LABEL[target]} 配置`}
       className="max-w-md"
       onOpenChange={(o) => {
         if (!o) onClose();
@@ -100,7 +104,7 @@ export function ModelExportDialog({ open, cliKey, target, onClose }: ModelExport
             取消
           </Button>
           <Button disabled={running || !providerName.trim()} onClick={() => void run()}>
-            {running ? "刷新中…" : "刷新"}
+            {running ? "同步中…" : "同步"}
           </Button>
         </div>
       </div>

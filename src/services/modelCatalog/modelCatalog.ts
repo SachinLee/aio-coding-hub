@@ -54,10 +54,7 @@ export async function modelCatalogSetEnabled(
     cmd: "model_catalog_set_enabled",
     args: { input },
     invoke: async () =>
-      mapGeneratedCommandResponse(
-        await commands.modelCatalogSetEnabled(input),
-        (item) => item
-      ),
+      mapGeneratedCommandResponse(await commands.modelCatalogSetEnabled(input), (item) => item),
   });
 }
 
@@ -127,6 +124,22 @@ export async function modelCatalogExportOpencode(
     invoke: async () =>
       mapGeneratedCommandResponse(
         await commands.modelCatalogExportOpencode(cliKey, providerName),
+        (result) => result
+      ),
+  });
+}
+
+export async function modelCatalogExportOmp(
+  cliKey: CliKey,
+  providerName: string
+): Promise<CliModelExportResult> {
+  return invokeGeneratedIpc({
+    title: "同步 OMP 模型列表",
+    cmd: "model_catalog_export_omp",
+    args: { cliKey, providerName },
+    invoke: async () =>
+      mapGeneratedCommandResponse(
+        await commands.modelCatalogExportOmp(cliKey, providerName),
         (result) => result
       ),
   });

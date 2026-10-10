@@ -1153,6 +1153,20 @@ export const commands = {
       else return { status: "error", error: e as any };
     }
   },
+  async modelCatalogExportOmp(
+    cliKey: string,
+    providerName: string
+  ): Promise<Result<CliModelExportResult, string>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("model_catalog_export_omp", { cliKey, providerName }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
   async modelPricesListAll(): Promise<Result<ModelPriceSummary[], string>> {
     try {
       return { status: "ok", data: await TAURI_INVOKE("model_prices_list_all") };

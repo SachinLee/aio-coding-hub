@@ -93,3 +93,15 @@ pub(crate) async fn model_catalog_export_opencode(
     )
     .await
 }
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn model_catalog_export_omp(
+    app: tauri::AppHandle,
+    db_state: tauri::State<'_, DbInitState>,
+    cli_key: String,
+    provider_name: String,
+) -> Result<crate::infra::cli_model_export::CliModelExportResult, String> {
+    crate::infra::cli_model_export::export_to_omp_cmd(app, db_state.inner(), cli_key, provider_name)
+        .await
+}
