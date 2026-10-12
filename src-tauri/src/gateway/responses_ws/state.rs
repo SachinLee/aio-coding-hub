@@ -271,13 +271,11 @@ impl Runtime {
             {
                 return Err("Responses recovery was not claimed");
             }
-        } else if record.pending.is_some()
-            || record
-                .completed
-                .as_ref()
-                .is_some_and(|history| generation.expected.count <= history.count)
-        {
-            return Err("Responses generation does not extend the completed history");
+        } else if record.pending.is_some() {
+            // A fresh generation carries the client's authoritative history and no
+            // inherited budget, so it need not extend the completed one: Codex retries
+            // a stream it never saw finish and normalizes its history between requests.
+            return Err("Responses generation conflicts with a pending recovery");
         }
         record.active_generation = Some(Arc::downgrade(&request.generation));
         record.http_only |= !request.client_ws || generation.budget.http_only;
@@ -1110,7 +1108,7 @@ mod tests {
         assert!(runtime
             .claim(&owner(), Some(&nonce), &items, &HistoryDigest::default())
             .is_err());
-        assert!(begin_fresh(&runtime, &compacted_owner, &nonce, &summary).is_err());
+        begin_fresh(&runtime, &compacted_owner, &nonce, &summary).unwrap();
         let extended = vec![input("compacted history"), input("next tool result")];
         assert!(runtime
             .claim(
@@ -1772,7 +1770,7 @@ mod tests {
             } else {
                 runtime.finish_generation(&ended, false);
             }
-            assert!(begin_fresh(&runtime, &owner(), &nonce, &first).is_err());
+            begin_fresh(&runtime, &owner(), &nonce, &first).unwrap();
             assert!(runtime
                 .claim(
                     &owner(),
@@ -1800,7 +1798,7 @@ mod tests {
     }
 
     #[test]
-    fn first_generation_of_a_turn_can_be_retried_after_it_ends() {
+    fn generation_of_a_turn_can_be_retried_after_it_fails_or_completes() {
         let runtime = Arc::new(Runtime::new(true));
         let nonce = runtime.issue_nonce(&owner()).unwrap();
         let items = vec![input("first")];
@@ -1816,7 +1814,8 @@ mod tests {
         runtime.begin_generation(&retry).unwrap();
         runtime.finish_generation(&retry, true);
         drop(retry);
-        assert!(begin_fresh(&runtime, &owner(), &nonce, &items).is_err());
+        // Codex retries a completed stream it never saw finish with the same input.
+        begin_fresh(&runtime, &owner(), &nonce, &items).unwrap();
     }
 
     #[test]

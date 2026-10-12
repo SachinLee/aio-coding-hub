@@ -540,92 +540,129 @@ async fn terminal_log(
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn ws_local_nonce_rejections_log_the_same_trace_without_calling_upstream() {
-    for case in ["forged", "completed-replay"] {
+async fn ws_forged_nonce_rejection_logs_the_same_trace_without_calling_upstream() {
+    let fixture = Fixture::new(true).await;
+    let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
+    let provider = fixture.provider("A", &upstream.origin(), true);
+    let (gateway, mut logs) = fixture.start().await;
+    let session = "local-rejection";
+    let Message::Text(create) = create_message(Some(session)) else {
+        unreachable!()
+    };
+    let mut body: Value = serde_json::from_str(&create).unwrap();
+    body["input"][0]["type"] = json!("message");
+    body["input"][0]["content"][0]["text"] = json!("private-prompt-must-not-be-logged");
+    let owner = protocol::Owner::parse(
+        body["client_metadata"]["x-codex-turn-metadata"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let nonce = fixture.runtime.issue_nonce(&owner).unwrap();
+    body["client_metadata"][protocol::TURN_STATE_HEADER] = json!("aio-ws-forged");
+    let reason = "context recovery ownership mismatch";
+    let mut socket = connect(&gateway, session).await.unwrap();
+    socket.send(Message::Text(body.to_string())).await.unwrap();
+    let error = recv_until(&mut socket, "error").await;
+    assert_eq!(error["status"], 400);
+    assert_eq!(error["error"]["code"], "invalid_request");
+    assert_eq!(error["error"]["message"], reason);
+    let trace = error["trace_id"].as_str().expect("local rejection trace");
+    let log = terminal_log(&mut logs).await;
+    assert_eq!(log.trace_id, trace);
+    assert_eq!(log.status, Some(400));
+    assert_eq!(log.error_code.as_deref(), Some("GW_REQUEST_REJECTED"));
+    assert_eq!(log.method, "POST");
+    assert_eq!(log.path, "/v1/responses");
+    assert_eq!(
+        serde_json::from_str::<Value>(&log.attempts_json).unwrap(),
+        json!([])
+    );
+    let details = log.error_details_json.as_deref().unwrap();
+    let parsed: Value = serde_json::from_str(details).unwrap();
+    assert_eq!(parsed["error_category"], "local");
+    assert_eq!(parsed["reason_code"], "invalid_request");
+    assert_eq!(parsed["reason"], reason);
+    let settings = log.special_settings_json.as_deref().unwrap();
+    let parsed: Vec<Value> = serde_json::from_str(settings).unwrap();
+    assert!(parsed
+        .iter()
+        .any(|setting| setting["type"] == "codex_responses_transport"
+            && setting["client_transport"] == "responses_ws"
+            && setting["failure_class"] == "local"
+            && setting["upstream_sent"] == false));
+    for encoded in [details, settings] {
+        assert!(!encoded.contains(&nonce));
+        assert!(!encoded.contains("aio-ws-forged"));
+        assert!(!encoded.contains("private-prompt-must-not-be-logged"));
+    }
+    assert!(stub.transports().is_empty());
+    assert!(fixture.active.snapshot().is_empty());
+    assert_eq!(
+        fixture
+            .circuit
+            .snapshot(provider, crate::shared::time::now_unix_seconds())
+            .failure_count,
+        0
+    );
+    assert!(logs.try_recv().is_err());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn codex_retry_of_a_completed_generation_runs_again_on_ws_and_http() {
+    // Codex resends the same input when it never saw the stream finish, e.g. the
+    // connection dropped after the gateway forwarded the terminal event.
+    for http in [false, true] {
         let fixture = Fixture::new(true).await;
         let (stub, upstream) = Stub::start("A", Behavior::Complete).await;
-        let provider = fixture.provider("A", &upstream.origin(), true);
+        fixture.provider("A", &upstream.origin(), true);
         let (gateway, mut logs) = fixture.start().await;
-        let session = "local-rejection";
+        let session = "completed-retry";
         let Message::Text(create) = create_message(Some(session)) else {
             unreachable!()
         };
         let mut body: Value = serde_json::from_str(&create).unwrap();
         body["input"][0]["type"] = json!("message");
-        body["input"][0]["content"][0]["text"] = json!("private-prompt-must-not-be-logged");
-        let owner = protocol::Owner::parse(
-            body["client_metadata"]["x-codex-turn-metadata"]
-                .as_str()
-                .unwrap(),
-        )
-        .unwrap();
-        let (nonce, reason) = if case == "completed-replay" {
-            let mut first = connect(&gateway, session).await.unwrap();
-            first.send(Message::Text(body.to_string())).await.unwrap();
-            let nonce = recv_until(&mut first, "response.metadata").await["headers"]
-                [protocol::TURN_STATE_HEADER]
-                .as_str()
-                .unwrap()
-                .to_owned();
-            recv_until(&mut first, "response.completed").await;
-            assert_eq!(terminal_log(&mut logs).await.status, Some(200));
-            first.close(None).await.unwrap();
-            drop(first);
-            stub.calls.lock().unwrap().clear();
-            (
-                nonce,
-                "Responses generation does not extend the completed history",
-            )
-        } else {
-            let nonce = fixture.runtime.issue_nonce(&owner).unwrap();
-            body["client_metadata"][protocol::TURN_STATE_HEADER] = json!("aio-ws-forged");
-            (nonce, "context recovery ownership mismatch")
-        };
         let mut socket = connect(&gateway, session).await.unwrap();
         socket.send(Message::Text(body.to_string())).await.unwrap();
-        let error = recv_until(&mut socket, "error").await;
-        assert_eq!(error["status"], 400);
-        assert_eq!(error["error"]["code"], "invalid_request");
-        assert_eq!(error["error"]["message"], reason);
-        let trace = error["trace_id"].as_str().expect("local rejection trace");
-        let log = terminal_log(&mut logs).await;
-        assert_eq!(log.trace_id, trace);
-        assert_eq!(log.status, Some(400));
-        assert_eq!(log.error_code.as_deref(), Some("GW_REQUEST_REJECTED"));
-        assert_eq!(log.method, "POST");
-        assert_eq!(log.path, "/v1/responses");
-        assert_eq!(
-            serde_json::from_str::<Value>(&log.attempts_json).unwrap(),
-            json!([])
-        );
-        let details = log.error_details_json.as_deref().unwrap();
-        let parsed: Value = serde_json::from_str(details).unwrap();
-        assert_eq!(parsed["error_category"], "local");
-        assert_eq!(parsed["reason_code"], "invalid_request");
-        assert_eq!(parsed["reason"], reason);
-        let settings = log.special_settings_json.as_deref().unwrap();
-        let parsed: Vec<Value> = serde_json::from_str(settings).unwrap();
-        assert!(parsed
-            .iter()
-            .any(|setting| setting["type"] == "codex_responses_transport"
-                && setting["client_transport"] == "responses_ws"
-                && setting["failure_class"] == "local"
-                && setting["upstream_sent"] == false));
-        for encoded in [details, settings] {
-            assert!(!encoded.contains(&nonce));
-            assert!(!encoded.contains("aio-ws-forged"));
-            assert!(!encoded.contains("private-prompt-must-not-be-logged"));
+        let nonce = recv_until(&mut socket, "response.metadata").await["headers"]
+            [protocol::TURN_STATE_HEADER]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        recv_until(&mut socket, "response.completed").await;
+        assert_eq!(terminal_log(&mut logs).await.status, Some(200));
+        socket.close(None).await.unwrap();
+        drop(socket);
+
+        body["client_metadata"][protocol::TURN_STATE_HEADER] = json!(nonce);
+        if http {
+            body.as_object_mut().unwrap().remove("type");
+            body["stream"] = json!(true);
+            let response = reqwest::Client::new()
+                .post(format!("{}/v1/responses", gateway.origin()))
+                .header(protocol::TURN_STATE_HEADER, &nonce)
+                .header("session-id", session)
+                .json(&body)
+                .send()
+                .await
+                .unwrap();
+            let status = response.status();
+            let text = response.text().await.unwrap();
+            assert_eq!(status, StatusCode::OK, "{text}");
+            assert!(text.contains("response.completed"));
+        } else {
+            let mut socket = connect(&gateway, session).await.unwrap();
+            socket.send(Message::Text(body.to_string())).await.unwrap();
+            let echoed = recv_until(&mut socket, "response.metadata").await;
+            assert_eq!(echoed["headers"][protocol::TURN_STATE_HEADER], nonce);
+            recv_until(&mut socket, "response.completed").await;
         }
-        assert!(stub.transports().is_empty());
-        assert!(fixture.active.snapshot().is_empty());
+        assert_eq!(terminal_log(&mut logs).await.status, Some(200));
         assert_eq!(
-            fixture
-                .circuit
-                .snapshot(provider, crate::shared::time::now_unix_seconds())
-                .failure_count,
-            0
+            stub.transports(),
+            if http { ["ws", "http"] } else { ["ws", "ws"] }
         );
-        assert!(logs.try_recv().is_err());
     }
 }
 

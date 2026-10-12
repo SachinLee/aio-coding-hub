@@ -702,7 +702,7 @@ mod tests {
     }
 
     #[test]
-    fn socket_owned_nonce_still_checks_full_history_and_rotates_across_turns() {
+    fn socket_owned_nonce_admits_full_resends_and_rotates_across_turns() {
         use serde_json::json;
         let runtime = Arc::new(state::Runtime::new(true));
         let connection = runtime.connection().unwrap();
@@ -723,11 +723,12 @@ mod tests {
             .unwrap()
             .nonce
             .clone();
-        // A missing echoed nonce must not bypass completed-history validation.
+        // A full resend without the echoed nonce is the client's authoritative history.
         let replay = prepare_request(connection.clone(), &headers, &body, None)
             .unwrap()
             .unwrap();
-        assert!(runtime.begin_generation(&replay).is_err());
+        runtime.begin_generation(&replay).unwrap();
+        runtime.finish_generation(&replay, false);
         body["input"].as_array_mut().unwrap().push(input);
         let extended = prepare_request(connection.clone(), &headers, &body, None)
             .unwrap()
