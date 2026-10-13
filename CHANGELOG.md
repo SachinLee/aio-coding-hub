@@ -6,6 +6,13 @@
 
 * **model-catalog:** OpenCode 模型同步支持读取含注释和尾随逗号的 JSONC 配置，保留无关配置值与连接设置；模型变化时仍写出严格 JSON（不保留注释），无变化时不重写文件，解析失败不覆盖原配置。
 
+## [0.60.22](https://github.com/dyndynjyxa/aio-coding-hub/compare/aio-coding-hub-v0.60.21...aio-coding-hub-v0.60.22) (2026-10-12)
+
+
+### Bug Fixes
+
+* **gateway:** allow retries of completed Codex responses ([cb3a330](https://github.com/dyndynjyxa/aio-coding-hub/commit/cb3a3308f8041d56a94e66b061ba7647f78b19df))
+
 ## [0.60.21](https://github.com/dyndynjyxa/aio-coding-hub/compare/aio-coding-hub-v0.60.20...aio-coding-hub-v0.60.21) (2026-10-09)
 
 
