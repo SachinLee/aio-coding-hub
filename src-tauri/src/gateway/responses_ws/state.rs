@@ -23,7 +23,6 @@ pub(in crate::gateway) const MAX_CONNECTIONS: usize = 4;
 // ponytail: fixed reservations admit two managed contexts; measure peaks before increasing concurrency.
 const RAW_BUFFER_BUDGET: usize = 256 * 1024 * 1024;
 const RAW_BUFFER_RESERVATION: u32 = 128 * 1024 * 1024;
-pub(in crate::gateway) const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub(in crate::gateway) struct Runtime {
     enabled: AtomicBool,

@@ -290,6 +290,9 @@ impl Stub {
         };
         let router = Router::new()
             .route("/v1/responses", get(stub_ws).post(stub_http))
+            .layer(axum::extract::DefaultBodyLimit::max(
+                crate::gateway::util::max_request_body_bytes(),
+            ))
             .with_state(stub.clone());
         (stub, Server::start(router).await)
     }
@@ -522,6 +525,47 @@ fn assert_completed(observed: &[Value], name: &str) {
             .count(),
         1
     );
+}
+
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "waits for the configured 70-second connection idle timeout"]
+async fn connection_idle_timeout_uses_global_setting_and_zero_disables_it() {
+    let fixture = Fixture::new(true).await;
+    let (gateway, _logs) = fixture.start().await;
+    let mut sockets = Vec::new();
+    for seconds in [0, 70] {
+        let mut settings = settings::read(fixture.app.handle()).unwrap();
+        settings.upstream_stream_idle_timeout_seconds = seconds;
+        settings::write(fixture.app.handle(), &settings).unwrap();
+        let mut socket = connect(&gateway, &format!("idle-{seconds}")).await.unwrap();
+        socket.send(Message::Ping(vec![1])).await.unwrap();
+        assert_eq!(
+            socket.next().await.unwrap().unwrap(),
+            Message::Pong(vec![1])
+        );
+        sockets.push(socket);
+    }
+
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    for socket in &mut sockets {
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), socket.next())
+                .await
+                .is_err(),
+            "must stay open beyond the former fixed 60-second timeout"
+        );
+    }
+    let closed = tokio::time::timeout(Duration::from_secs(15), sockets[1].next())
+        .await
+        .expect("configured idle timeout closes the connection");
+    assert!(matches!(closed, Some(Ok(Message::Close(_)))));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), sockets[0].next())
+            .await
+            .is_err(),
+        "zero disables connection idle timeout"
+    );
+    let _ = sockets[0].close(None).await;
 }
 
 async fn terminal_log(

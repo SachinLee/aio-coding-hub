@@ -197,9 +197,6 @@ pub(in crate::gateway) async fn send(
         }
     }
     let serialized = payload.to_string();
-    if serialized.len() > protocol::MAX_MESSAGE_BYTES {
-        return SendOutcome::Local("Responses request exceeds WebSocket byte limit");
-    }
     let send_cap = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
     let send_deadline = deadline
         .map(tokio::time::Instant::from_std)

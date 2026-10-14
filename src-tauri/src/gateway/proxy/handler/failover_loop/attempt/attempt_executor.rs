@@ -202,13 +202,6 @@ where
                 );
                 return AttemptSendOutcome::PluginBlocked(blocked.reason);
             }
-            if (input.ws_request.is_some() || input.ws_connection.is_some())
-                && output.body.len() > crate::gateway::responses_ws::protocol::MAX_MESSAGE_BYTES
-            {
-                return AttemptSendOutcome::PluginBlocked(
-                    "Managed Responses plugin output exceeds byte limit".into(),
-                );
-            }
             semantic_headers = output.headers;
             // The hook transforms this physical attempt, not the provider retry baseline.
             body_state_for_attempt.replace_decoded(output.body);
@@ -272,13 +265,6 @@ where
         }
     }
 
-    if (input.ws_request.is_some() || input.ws_connection.is_some())
-        && upstream_body.len() > crate::gateway::responses_ws::protocol::MAX_MESSAGE_BYTES
-    {
-        return AttemptSendOutcome::PluginBlocked(
-            "Managed Responses request exceeds byte limit".into(),
-        );
-    }
     emit_upstream_attempt_fingerprint(
         ctx,
         input,
