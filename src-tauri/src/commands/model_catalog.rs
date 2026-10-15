@@ -2,7 +2,7 @@
 
 use crate::app::model_catalog_service::{
     self, ModelCatalogApplyInput, ModelCatalogRefreshPreview, ModelCatalogResult,
-    ModelCatalogSetEnabledInput, ModelCatalogUpdateInput,
+    ModelCatalogSetEnabledInput, ModelCatalogSetRouteEnabledInput, ModelCatalogUpdateInput,
 };
 use crate::app_state::DbInitState;
 
@@ -34,6 +34,15 @@ pub(crate) async fn model_catalog_set_enabled(
     input: ModelCatalogSetEnabledInput,
 ) -> Result<model_catalog_service::ModelCatalogItem, String> {
     model_catalog_service::model_catalog_set_enabled(app, db_state.inner(), input).await
+}
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn model_catalog_set_route_enabled(
+    app: tauri::AppHandle,
+    db_state: tauri::State<'_, DbInitState>,
+    input: ModelCatalogSetRouteEnabledInput,
+) -> Result<model_catalog_service::ModelCatalogRouteState, String> {
+    model_catalog_service::model_catalog_set_route_enabled(app, db_state.inner(), input).await
 }
 
 #[tauri::command]

@@ -107,15 +107,8 @@ pub(in crate::gateway) async fn send(
         })
         && !connection.runtime.cooling(&key);
     if previous.is_some() {
-        let continuation = connection.continuation.lock_or_recover();
-        let warm = connection.prewarm.lock_or_recover();
-        let valid = continuation.as_ref().is_some_and(|current| {
-            current.provider_id == provider_id
-                && current.upstream_ws
-                && Some(current.response_id.as_str()) == previous
-        }) || warm.as_ref().is_some_and(|warm| {
-            warm.provider_id == provider_id && Some(warm.response_id.as_str()) == previous
-        });
+        let valid =
+            previous.and_then(|id| connection.continuation_provider_id(id)) == Some(provider_id);
         if !valid || !allow_ws || reusable.is_none() {
             return SendOutcome::ContextLost;
         }

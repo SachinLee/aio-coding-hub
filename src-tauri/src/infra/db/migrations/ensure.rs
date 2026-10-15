@@ -31,6 +31,7 @@ pub(super) fn apply_ensure_patches(conn: &mut Connection) -> crate::shared::erro
     ensure_provider_extension_values_table(conn)?;
     ensure_provider_model_catalog_table(conn)?;
     ensure_model_catalog_metadata_table(conn)?;
+    ensure_model_provider_route_overrides_table(conn)?;
     Ok(())
 }
 
@@ -1289,6 +1290,34 @@ CREATE INDEX IF NOT EXISTS idx_model_catalog_metadata_cli_key
         )
         .map_err(|e| format!("failed to add model_catalog_metadata.enabled column: {e}"))?;
     }
+    Ok(())
+}
+
+fn ensure_model_provider_route_overrides_table(
+    conn: &mut Connection,
+) -> crate::shared::error::AppResult<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS model_provider_route_overrides (
+  cli_key TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  provider_id INTEGER NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(cli_key, model_id, provider_id)
+);
+CREATE INDEX IF NOT EXISTS idx_model_provider_route_overrides_cli_model
+  ON model_provider_route_overrides(cli_key, model_id);
+CREATE TRIGGER IF NOT EXISTS delete_provider_model_route_overrides
+AFTER DELETE ON providers
+BEGIN
+  DELETE FROM model_provider_route_overrides WHERE provider_id = OLD.id;
+END;
+DELETE FROM model_provider_route_overrides
+WHERE provider_id NOT IN (SELECT id FROM providers);
+"#,
+    )
+    .map_err(|e| format!("failed to ensure model_provider_route_overrides table: {e}"))?;
     Ok(())
 }
 

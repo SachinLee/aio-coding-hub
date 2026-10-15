@@ -8,6 +8,8 @@ import {
   type ModelCatalogRefreshPreview,
   type ModelCatalogResult,
   type ModelCatalogSetEnabledInput,
+  type ModelCatalogRouteState,
+  type ModelCatalogSetRouteEnabledInput,
   type ModelCatalogUpdateInput,
 } from "../../generated/bindings";
 import { invokeGeneratedIpc, mapGeneratedCommandResponse } from "../generatedIpc";
@@ -22,6 +24,8 @@ export type {
   ModelCatalogRefreshPreview,
   ModelCatalogResult,
   ModelCatalogSetEnabledInput,
+  ModelCatalogRouteState,
+  ModelCatalogSetRouteEnabledInput,
   ModelCatalogUpdateInput,
 };
 
@@ -55,6 +59,21 @@ export async function modelCatalogSetEnabled(
     args: { input },
     invoke: async () =>
       mapGeneratedCommandResponse(await commands.modelCatalogSetEnabled(input), (item) => item),
+  });
+}
+
+export async function modelCatalogSetRouteEnabled(
+  input: ModelCatalogSetRouteEnabledInput
+): Promise<ModelCatalogRouteState> {
+  return invokeGeneratedIpc({
+    title: "Update model provider route enabled state",
+    cmd: "model_catalog_set_route_enabled",
+    args: { input },
+    invoke: async () =>
+      mapGeneratedCommandResponse(
+        await commands.modelCatalogSetRouteEnabled(input),
+        (state) => state
+      ),
   });
 }
 

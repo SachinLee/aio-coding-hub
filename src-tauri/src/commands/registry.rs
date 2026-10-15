@@ -134,6 +134,7 @@ macro_rules! generated_command_registry {
             model_catalog_list => crate::commands::model_catalog::model_catalog_list,
             model_catalog_update => crate::commands::model_catalog::model_catalog_update,
             model_catalog_set_enabled => crate::commands::model_catalog::model_catalog_set_enabled,
+            model_catalog_set_route_enabled => crate::commands::model_catalog::model_catalog_set_route_enabled,
             model_catalog_refresh_preview => crate::commands::model_catalog::model_catalog_refresh_preview,
             model_catalog_refresh_apply => crate::commands::model_catalog::model_catalog_refresh_apply,
             model_catalog_export_default_provider => crate::commands::model_catalog::model_catalog_export_default_provider,

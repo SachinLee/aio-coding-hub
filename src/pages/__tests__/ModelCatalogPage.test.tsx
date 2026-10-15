@@ -1,19 +1,23 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { createTestQueryClient } from "../../test/utils/reactQuery";
 import { ModelCatalogPage } from "../ModelCatalogPage";
 import {
   modelCatalogList,
   modelCatalogSetEnabled,
+  modelCatalogSetRouteEnabled,
   modelCatalogUpdate,
 } from "../../services/modelCatalog/modelCatalog";
 import { cliManagerCodexModelCatalogRefresh } from "../../services/cli/cliManager";
 
+vi.mock("sonner", () => ({ toast: vi.fn() }));
 vi.mock("../../services/modelCatalog/modelCatalog", () => ({
   modelCatalogList: vi.fn(),
   modelCatalogUpdate: vi.fn(),
   modelCatalogSetEnabled: vi.fn(),
+  modelCatalogSetRouteEnabled: vi.fn(),
 }));
 
 vi.mock("../../services/cli/cliManager", () => ({
@@ -48,6 +52,7 @@ const catalog = {
           upstreamModelId: "gpt-5-upstream",
           snapshotStatus: "fresh" as const,
           isMapping: true,
+          routeEnabled: true,
         },
       ],
     },
@@ -115,6 +120,51 @@ describe("ModelCatalogPage", () => {
       modelId: "gpt-5-test",
       enabled: false,
     });
+  });
+
+  it("disables one provider route without disabling its model", async () => {
+    const disabledCatalog = {
+      ...catalog,
+      items: catalog.items.map((item) => ({
+        ...item,
+        routes: item.routes.map((route) => ({ ...route, routeEnabled: false })),
+      })),
+    };
+    vi.mocked(modelCatalogList).mockResolvedValueOnce(catalog).mockResolvedValue(disabledCatalog);
+    vi.mocked(modelCatalogSetRouteEnabled).mockResolvedValue({
+      cliKey: "codex",
+      modelId: "gpt-5-test",
+      providerId: 7,
+      enabled: false,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /1 条路由/ }));
+    const toggle = screen.getByRole("switch", { name: "Primary 用于 gpt-5-test" });
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(modelCatalogSetRouteEnabled).toHaveBeenCalledWith({
+        cliKey: "codex",
+        modelId: "gpt-5-test",
+        providerId: 7,
+        enabled: false,
+      })
+    );
+    await waitFor(() => expect(toggle).toHaveAttribute("data-state", "unchecked"));
+    expect(screen.getByRole("switch", { name: "启用 gpt-5-test" })).toHaveAttribute(
+      "data-state",
+      "checked"
+    );
+  });
+
+  it("restores a provider route and reports a save failure", async () => {
+    vi.mocked(modelCatalogList).mockResolvedValue(catalog);
+    vi.mocked(modelCatalogSetRouteEnabled).mockRejectedValue(new Error("save failed"));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /1 条路由/ }));
+    const toggle = screen.getByRole("switch", { name: "Primary 用于 gpt-5-test" });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("路由更新失败：save failed"));
+    await waitFor(() => expect(toggle).toHaveAttribute("data-state", "checked"));
   });
 
   it("refreshes the Codex catalog only on the Codex tab", async () => {

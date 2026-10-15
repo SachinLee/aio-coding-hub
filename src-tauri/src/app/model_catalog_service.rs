@@ -1,7 +1,9 @@
 //! Usage: Model catalog query and metadata update application service.
 
 use crate::app_state::{ensure_db_ready, DbInitState};
-use crate::infra::{model_catalog_metadata, provider_model_catalog};
+use crate::infra::{
+    model_catalog_metadata, model_provider_route_overrides, provider_model_catalog,
+};
 use crate::{blocking, db};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -84,6 +86,26 @@ pub(crate) struct ModelCatalogApplyDecision {
 pub(crate) struct ModelCatalogApplyInput {
     pub cli_key: String,
     pub decisions: Vec<ModelCatalogApplyDecision>,
+}
+
+#[derive(Debug, Clone, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ModelCatalogSetRouteEnabledInput {
+    pub cli_key: String,
+    pub model_id: String,
+    pub provider_id: i64,
+    pub enabled: bool,
+}
+
+/// Whether a (model, provider) route is explicitly disabled. Returned so the
+/// catalog page can render per-route switches without a separate load.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ModelCatalogRouteState {
+    pub cli_key: String,
+    pub model_id: String,
+    pub provider_id: i64,
+    pub enabled: bool,
 }
 
 pub(crate) async fn model_catalog_list(
@@ -223,6 +245,58 @@ fn set_enabled_blocking(
         crate::shared::time::now_unix_seconds(),
     )?;
     Ok(catalog_item_with_metadata(item, &metadata))
+}
+
+fn set_route_enabled_blocking(
+    db: &db::Db,
+    input: ModelCatalogSetRouteEnabledInput,
+) -> crate::shared::error::AppResult<ModelCatalogRouteState> {
+    // The route must exist in the current catalog snapshot; this rejects
+    // stale provider ids and models that no longer route.
+    let catalog = provider_model_catalog::list_model_catalog(db, &input.cli_key)?;
+    let item = catalog
+        .into_iter()
+        .find(|item| item.model_id == input.model_id.trim())
+        .ok_or_else(|| "DB_NOT_FOUND: model is not in the current catalog".to_string())
+        .map_err(crate::shared::error::AppError::from)?;
+    if !item
+        .routes
+        .iter()
+        .any(|route| route.provider_id == input.provider_id)
+    {
+        return Err(
+            "DB_NOT_FOUND: provider is not a route of this model in the current catalog"
+                .to_string(),
+        )
+        .map_err(crate::shared::error::AppError::from);
+    }
+    let override_row = model_provider_route_overrides::set_enabled(
+        db,
+        &input.cli_key,
+        &item.model_id,
+        input.provider_id,
+        input.enabled,
+        crate::shared::time::now_unix_seconds(),
+    )?;
+    Ok(ModelCatalogRouteState {
+        cli_key: input.cli_key,
+        model_id: item.model_id,
+        provider_id: input.provider_id,
+        enabled: override_row.enabled,
+    })
+}
+
+pub(crate) async fn model_catalog_set_route_enabled(
+    app: tauri::AppHandle,
+    db_state: &DbInitState,
+    input: ModelCatalogSetRouteEnabledInput,
+) -> Result<ModelCatalogRouteState, String> {
+    let db = ensure_db_ready(app, db_state).await?;
+    blocking::run("model_catalog_set_route_enabled", move || {
+        set_route_enabled_blocking(&db, input)
+    })
+    .await
+    .map_err(Into::into)
 }
 
 fn other_status(

@@ -22,6 +22,7 @@ pub(crate) mod model_catalog_metadata;
 pub(crate) mod model_price_aliases;
 pub(crate) mod model_prices;
 pub(crate) mod model_prices_sync;
+pub(crate) mod model_provider_route_overrides;
 pub(crate) mod plugins;
 pub(crate) mod prompt_sync;
 pub(crate) mod provider_circuit_breakers;

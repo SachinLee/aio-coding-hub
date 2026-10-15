@@ -90,6 +90,26 @@ impl ProviderResolutionMiddleware {
             ctx.requested_model.as_deref(),
             ctx.forced_provider_id,
         );
+        // A known upstream response may finish on its owner even after a route
+        // toggle. A raw client response id or an explicit provider lock is not
+        // sufficient to bypass the toggle.
+        let continuation_provider_id = if ctx.cli_key == "codex" && ctx.forced_provider_id.is_none()
+        {
+            let previous = ctx
+                .introspection_json
+                .as_ref()
+                .and_then(|body| body.get("previous_response_id"))
+                .and_then(serde_json::Value::as_str);
+            let connection = ctx
+                .ws_connection
+                .as_ref()
+                .or_else(|| ctx.ws_request.as_ref().map(|request| &request.connection));
+            previous.and_then(|id| connection.and_then(|conn| conn.continuation_provider_id(id)))
+        } else {
+            None
+        };
+        let mut route_disabled_provider_ids = Vec::new();
+        let mut all_selected_routes_disabled = false;
         if let Some(model) = ctx
             .requested_model
             .clone()
@@ -99,17 +119,32 @@ impl ProviderResolutionMiddleware {
             let cli_key = ctx.cli_key.clone();
             let mut providers = std::mem::take(&mut ctx.providers);
             let filtered = crate::blocking::run("model_catalog_route", move || {
-                crate::infra::provider_model_catalog::retain_routable_providers_for_cli(
-                    &db,
-                    &cli_key,
-                    &mut providers,
-                    &model,
-                )?;
-                Ok::<_, crate::shared::error::AppError>(providers)
+                let candidate_ids = provider_ids(&providers);
+                let disabled =
+                    crate::infra::provider_model_catalog::retain_routable_providers_for_cli(
+                        &db,
+                        &cli_key,
+                        &mut providers,
+                        &model,
+                        continuation_provider_id,
+                    )?;
+                let all_candidates_disabled = !candidate_ids.is_empty()
+                    && candidate_ids
+                        .iter()
+                        .all(|id| disabled.contains(id) && Some(*id) != continuation_provider_id);
+                Ok::<_, crate::shared::error::AppError>((
+                    providers,
+                    disabled,
+                    all_candidates_disabled,
+                ))
             })
             .await;
             match filtered {
-                Ok(providers) => ctx.providers = providers,
+                Ok((providers, disabled, all_candidates_disabled)) => {
+                    ctx.providers = providers;
+                    route_disabled_provider_ids = disabled;
+                    all_selected_routes_disabled = all_candidates_disabled;
+                }
                 Err(err) => {
                     let log_ctx = build_early_error_log_ctx(&ctx);
                     let special_settings_json =
@@ -126,6 +161,23 @@ impl ProviderResolutionMiddleware {
                 }
             }
         }
+        if !route_disabled_provider_ids.is_empty() {
+            push_special_setting(
+                &ctx.special_settings,
+                serde_json::json!({
+                    "type": "provider_model_route_filter",
+                    "scope": "request",
+                    "hit": true,
+                    "requestedModel": ctx.requested_model.as_deref(),
+                    "disabledProviderIds": &route_disabled_provider_ids,
+                    "eligibleProviderIds": provider_ids(&ctx.providers),
+                    "continuationProviderId": continuation_provider_id,
+                }),
+            );
+        }
+        let forced_provider_route_disabled = ctx
+            .forced_provider_id
+            .is_some_and(|id| route_disabled_provider_ids.contains(&id));
         let initial_provider_ids = model_policy_filter.original_provider_ids.clone();
         let provider_ids_after_policy = provider_ids(&ctx.providers);
         let no_eligible_after_policy = ctx.requested_model.is_some()
@@ -133,14 +185,15 @@ impl ProviderResolutionMiddleware {
             && provider_ids_after_policy.is_empty();
         let all_policies_invalid = no_eligible_after_policy
             && model_policy_filter.invalid_provider_ids.len() == initial_provider_ids.len();
-        let forced_provider_model_ineligible = ctx.forced_provider_id.is_some_and(|provider_id| {
-            model_policy_filter
-                .ineligible_provider_ids
-                .contains(&provider_id)
-                || model_policy_filter
-                    .invalid_provider_ids
+        let forced_provider_model_ineligible = forced_provider_route_disabled
+            || ctx.forced_provider_id.is_some_and(|provider_id| {
+                model_policy_filter
+                    .ineligible_provider_ids
                     .contains(&provider_id)
-        });
+                    || model_policy_filter
+                        .invalid_provider_ids
+                        .contains(&provider_id)
+            });
 
         // --- forced provider ---
         let forced_provider_missing = force_provider_if_requested(
@@ -189,6 +242,11 @@ impl ProviderResolutionMiddleware {
             SessionBoundResult::Preferred(id) => Some(*id),
             _ => None,
         };
+        if let Some(index) = continuation_provider_id
+            .and_then(|id| ctx.providers.iter().position(|provider| provider.id == id))
+        {
+            ctx.providers.rotate_left(index);
+        }
 
         // --- no enabled provider guard ---
         if ctx.providers.is_empty() {
@@ -226,7 +284,24 @@ impl ProviderResolutionMiddleware {
                     forced_provider_model_ineligible,
                 }),
             );
-            let (kind, message) = if forced_provider_model_ineligible {
+            let (kind, message) = if forced_provider_route_disabled {
+                (
+                    EarlyErrorKind::ForcedProviderNotEligibleForModel,
+                    format!(
+                        "route to forced provider {} is disabled for requested model {}",
+                        ctx.forced_provider_id.unwrap_or_default(),
+                        ctx.requested_model.as_deref().unwrap_or("-")
+                    ),
+                )
+            } else if all_selected_routes_disabled {
+                (
+                    EarlyErrorKind::NoEligibleProviderForModel,
+                    format!(
+                        "all provider routes are disabled for requested model {}",
+                        ctx.requested_model.as_deref().unwrap_or("-")
+                    ),
+                )
+            } else if forced_provider_model_ineligible {
                 (
                     EarlyErrorKind::ForcedProviderNotEligibleForModel,
                     format!(

@@ -782,6 +782,26 @@ pub(in crate::gateway) struct Connection {
     pub(in crate::gateway) prewarm: Mutex<Option<Prewarm>>,
 }
 
+impl Connection {
+    /// Only locally recorded upstream context can preserve a disabled route.
+    /// The send path still validates the socket key and transport availability.
+    pub(in crate::gateway) fn continuation_provider_id(&self, response_id: &str) -> Option<i64> {
+        if let Some(current) = self
+            .continuation
+            .lock_or_recover()
+            .as_ref()
+            .filter(|current| current.upstream_ws && current.response_id == response_id)
+        {
+            return Some(current.provider_id);
+        }
+        self.prewarm
+            .lock_or_recover()
+            .as_ref()
+            .filter(|warm| warm.response_id == response_id)
+            .map(|warm| warm.provider_id)
+    }
+}
+
 pub(in crate::gateway) struct Prewarm {
     pub(in crate::gateway) response_id: String,
     pub(in crate::gateway) provider_id: i64,
@@ -968,6 +988,34 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    #[test]
+    fn continuation_route_owner_requires_a_locally_recorded_websocket_response() {
+        let runtime = Arc::new(Runtime::new(true));
+        let connection = runtime.connection().unwrap();
+        assert_eq!(connection.continuation_provider_id("unknown"), None);
+        *connection.continuation.lock_or_recover() = Some(Continuation {
+            identity: None,
+            response_id: "resp-owned".into(),
+            provider_id: 7,
+            upstream_ws: true,
+            history: HistoryDigest::default(),
+        });
+        assert_eq!(connection.continuation_provider_id("resp-owned"), Some(7));
+        assert_eq!(connection.continuation_provider_id("resp-other"), None);
+        connection
+            .continuation
+            .lock_or_recover()
+            .as_mut()
+            .unwrap()
+            .upstream_ws = false;
+        assert_eq!(connection.continuation_provider_id("resp-owned"), None);
+        *connection.prewarm.lock_or_recover() = Some(Prewarm {
+            response_id: "resp-warm".into(),
+            provider_id: 8,
+            history: HistoryDigest::default(),
+        });
+        assert_eq!(connection.continuation_provider_id("resp-warm"), Some(8));
+    }
     fn owner() -> Owner {
         Owner {
             session: "session".into(),

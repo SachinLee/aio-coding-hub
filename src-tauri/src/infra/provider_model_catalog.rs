@@ -34,6 +34,9 @@ pub(crate) struct ModelCatalogRoute {
     pub upstream_model_id: String,
     pub snapshot_status: String,
     pub is_mapping: bool,
+    /// False when the user disabled this (model, provider) route. Missing
+    /// override rows count as enabled.
+    pub route_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, specta::Type)]
@@ -48,7 +51,26 @@ pub(crate) fn list_model_catalog(
     cli_key: &str,
 ) -> crate::shared::error::AppResult<Vec<ModelCatalogItem>> {
     let selection = providers::list_enabled_for_gateway_using_active_mode(db, cli_key)?;
-    list_model_catalog_for_providers(db, &selection.providers)
+    let mut items = list_model_catalog_for_providers(db, &selection.providers)?;
+    // Merge per-(model, provider) route overrides so the catalog page can
+    // render per-route switches. Unknown model ids normalize to themselves
+    // here; override rows for other model ids simply do not match.
+    for item in &mut items {
+        let disabled = crate::infra::model_provider_route_overrides::disabled_provider_ids(
+            db,
+            cli_key,
+            &item.model_id,
+        )?;
+        if disabled.is_empty() {
+            continue;
+        }
+        for route in &mut item.routes {
+            if disabled.contains(&route.provider_id) {
+                route.route_enabled = false;
+            }
+        }
+    }
+    Ok(items)
 }
 
 pub(crate) fn save_success(
@@ -218,6 +240,7 @@ fn list_model_catalog_for_providers(
                     upstream_model_id: upstream_model_id.clone(),
                     snapshot_status: snapshot.status.clone(),
                     is_mapping: upstream_model_id != model_id,
+                    route_enabled: true,
                 });
         }
     }
@@ -252,24 +275,29 @@ pub(crate) fn retain_routable_providers_for_cli(
     cli_key: &str,
     providers: &mut Vec<ProviderForGateway>,
     source_model: &str,
-) -> crate::shared::error::AppResult<()> {
+    continuation_provider_id: Option<i64>,
+) -> crate::shared::error::AppResult<Vec<i64>> {
     // A model the user explicitly disabled in the catalog must not route,
     // even when provider snapshots still advertise it.
     if crate::infra::model_catalog_metadata::is_disabled(db, cli_key, source_model)? {
         providers.clear();
-        return Ok(());
+        return Ok(Vec::new());
     }
-    if cli_key == "codex" {
-        return retain_routable_providers(db, providers, source_model);
+    // Per-(model, provider) route overrides: drop only the routes the user
+    // disabled for this model; sibling models of the same provider are
+    // unaffected.
+    let disabled_routes = crate::infra::model_provider_route_overrides::disabled_provider_ids(
+        db,
+        cli_key,
+        source_model,
+    )?;
+    if !disabled_routes.is_empty() {
+        providers.retain(|provider| {
+            Some(provider.id) == continuation_provider_id || !disabled_routes.contains(&provider.id)
+        });
     }
-    let mut retained = Vec::with_capacity(providers.len());
-    for provider in providers.drain(..) {
-        if provider_route_unknown_or_supported(db, &provider, source_model)? {
-            retained.push(provider);
-        }
-    }
-    *providers = retained;
-    Ok(())
+    retain_routable_providers(db, providers, source_model)?;
+    Ok(disabled_routes)
 }
 
 pub(crate) fn retain_routable_providers(
@@ -393,6 +421,58 @@ fn map_snapshot(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProviderModelCatalo
 mod tests {
     use super::*;
 
+    #[test]
+    fn route_overrides_isolate_models_preserve_continuations_and_clean_up_deleted_providers() {
+        use crate::infra::model_provider_route_overrides as overrides;
+
+        let dir = tempfile::tempdir().unwrap();
+        let db = db::init_for_tests(&dir.path().join("route-overrides.db")).unwrap();
+        db.open_connection()
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO providers(id, cli_key, name, base_url, api_key_plaintext, created_at, updated_at)
+                 VALUES (7001, 'codex', 'A', 'https://example.invalid', '', 1, 1),
+                        (7002, 'codex', 'B', 'https://example.invalid', '', 1, 1);",
+            )
+            .unwrap();
+        let route_ids = |cli_key: &str, model: &str, continuation| {
+            let mut candidates = [7001, 7002]
+                .into_iter()
+                .map(|id| {
+                    providers::get_source_provider_for_gateway(&db, id)
+                        .unwrap()
+                        .0
+                })
+                .collect();
+            retain_routable_providers_for_cli(&db, cli_key, &mut candidates, model, continuation)
+                .unwrap();
+            candidates
+                .iter()
+                .map(|provider| provider.id)
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(route_ids("codex", "model-a", None), vec![7001, 7002]);
+        overrides::set_enabled(&db, "codex", "model-a", 7001, false, 1).unwrap();
+        assert_eq!(route_ids("codex", "model-a", None), vec![7002]);
+        assert_eq!(route_ids("codex", "model-b", None), vec![7001, 7002]);
+        assert_eq!(route_ids("claude", "model-a", None), vec![7001, 7002]);
+        assert_eq!(route_ids("codex", "model-a", Some(7001)), vec![7001, 7002]);
+        assert_eq!(route_ids("codex", "model-a", Some(9999)), vec![7002]);
+        assert!(overrides::set_enabled(&db, "claude", "model-a", 7001, false, 1).is_err());
+
+        overrides::set_enabled(&db, "codex", "model-a", 7002, false, 2).unwrap();
+        assert!(route_ids("codex", "model-a", None).is_empty());
+        overrides::set_enabled(&db, "codex", "model-a", 7001, true, 3).unwrap();
+        assert_eq!(route_ids("codex", "model-a", None), vec![7001]);
+
+        db.open_connection()
+            .unwrap()
+            .execute("DELETE FROM providers WHERE id = 7002", [])
+            .unwrap();
+        assert!(!overrides::is_disabled(&db, "codex", "model-a", 7002).unwrap());
+        assert!(overrides::set_enabled(&db, "codex", "model-a", 7002, false, 4).is_err());
+    }
     #[test]
     fn union_requires_a_current_snapshot_and_deduplicates_models() {
         let mut models = vec![

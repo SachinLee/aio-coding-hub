@@ -8,6 +8,7 @@ import {
   modelCatalogList,
   modelCatalogRefreshPreview,
   modelCatalogSetEnabled,
+  modelCatalogSetRouteEnabled,
   modelCatalogUpdate,
   type ModelCatalogItem,
   type ModelCatalogRefreshPreview,
@@ -83,6 +84,40 @@ export function ModelCatalogPage() {
         queryClient.setQueryData(queryKey, context.previous);
       }
       toast(`模型启停更新失败：${error.message}`);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey });
+    },
+  });
+  const setRouteEnabledMutation = useMutation({
+    mutationFn: modelCatalogSetRouteEnabled,
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<ModelCatalogResult>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<ModelCatalogResult>(queryKey, {
+          ...previous,
+          items: previous.items.map((item) =>
+            item.modelId === input.modelId
+              ? {
+                  ...item,
+                  routes: item.routes.map((route) =>
+                    route.providerId === input.providerId
+                      ? { ...route, routeEnabled: input.enabled }
+                      : route
+                  ),
+                }
+              : item
+          ),
+        });
+      }
+      return { previous };
+    },
+    onError: (error, _input, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+      toast(`路由更新失败：${error.message}`);
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey });
@@ -230,6 +265,9 @@ export function ModelCatalogPage() {
                 const toggling =
                   setEnabledMutation.isPending &&
                   setEnabledMutation.variables?.modelId === item.modelId;
+                const routeToggling =
+                  setRouteEnabledMutation.isPending &&
+                  setRouteEnabledMutation.variables?.modelId === item.modelId;
                 return (
                   <ModelRow
                     key={item.modelId}
@@ -239,6 +277,7 @@ export function ModelCatalogPage() {
                     expanded={expandedModel === item.modelId}
                     saving={saving}
                     toggling={toggling}
+                    routeToggling={routeToggling}
                     error={
                       updateMutation.isError && updateMutation.variables?.modelId === item.modelId
                         ? updateMutation.error.message
@@ -256,6 +295,14 @@ export function ModelCatalogPage() {
                       setEnabledMutation.mutate({
                         cliKey: activeCli,
                         modelId: item.modelId,
+                        enabled,
+                      })
+                    }
+                    onToggleRoute={(providerId, enabled) =>
+                      setRouteEnabledMutation.mutate({
+                        cliKey: activeCli,
+                        modelId: item.modelId,
+                        providerId,
                         enabled,
                       })
                     }
@@ -302,10 +349,12 @@ function ModelRow({
   expanded,
   saving,
   toggling,
+  routeToggling,
   error,
   onExpand,
   onDraftChange,
   onToggleEnabled,
+  onToggleRoute,
   onSave,
 }: {
   cliKey: CliKey;
@@ -314,10 +363,12 @@ function ModelRow({
   expanded: boolean;
   saving: boolean;
   toggling: boolean;
+  routeToggling: boolean;
   error: string | null;
   onExpand: () => void;
   onDraftChange: (draft: { contextWindow: string; reasoningEffort: string }) => void;
   onToggleEnabled: (enabled: boolean) => void;
+  onToggleRoute: (providerId: number, enabled: boolean) => void;
   onSave: () => void;
 }) {
   const parsedContextWindow = parseContextWindow(draft.contextWindow);
@@ -434,9 +485,18 @@ function ModelRow({
                   <span className="truncate font-medium">
                     {route.routeOrder + 1}. {route.providerName}
                   </span>
-                  <span className="truncate text-muted-foreground" title={route.upstreamModelId}>
-                    {route.isMapping ? `${item.modelId} → ` : ""}
-                    {route.upstreamModelId} · {route.snapshotStatus}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-muted-foreground" title={route.upstreamModelId}>
+                      {route.isMapping ? `${item.modelId} → ` : ""}
+                      {route.upstreamModelId} · {route.snapshotStatus}
+                    </span>
+                    <Switch
+                      size="sm"
+                      checked={route.routeEnabled}
+                      disabled={routeToggling}
+                      onCheckedChange={(enabled) => onToggleRoute(route.providerId, enabled)}
+                      aria-label={`${route.providerName === "" ? route.providerId : route.providerName} 用于 ${item.modelId}`}
+                    />
                   </span>
                 </div>
               ))}
