@@ -177,6 +177,56 @@ fn models_for_provider(
     Ok(models)
 }
 
+/// Adaptive-only Anthropic models (Opus 4.6+, Sonnet 4.6+, Haiku 5.5+,
+/// Fable/Mythos 5+) reject classic `thinking.type: "enabled"/"disabled"` and
+/// require `thinking.type: "adaptive"` (+ optional `output_config.effort`).
+///
+/// Mirrors the oh-my-pi compat rule (`pi-catalog/src/compat/resolve.ts`):
+/// Claude `haiku` revision >= 5.5, other Claude revisions >= 4.6, plus
+/// Fable/Mythos 5+. Dated snapshot suffixes (`...-20250929`) are ignored.
+fn is_anthropic_adaptive_only(model_id: &str) -> bool {
+    let id = model_id.to_ascii_lowercase();
+    let rest = if let Some(rest) = id.strip_prefix("claude-haiku-") {
+        return revision_at_least(rest, (5, 5));
+    } else if let Some(rest) = id.strip_prefix("claude-opus-") {
+        rest
+    } else if let Some(rest) = id.strip_prefix("claude-sonnet-") {
+        rest
+    } else if let Some(rest) = id
+        .strip_prefix("fable-")
+        .or_else(|| id.strip_prefix("mythos-"))
+    {
+        return revision_at_least(rest, (5, 0));
+    } else {
+        return false;
+    };
+    revision_at_least(rest, (4, 6))
+}
+
+/// Parse a `major` or `major-minor` revision prefix (`"5-5"`, `"4-6"`,
+/// `"4-6-20250929"`) and compare it against `(major, minor)`; minor defaults
+/// to 0 when absent. Non-numeric prefixes never match.
+fn revision_at_least(rest: &str, min_rev: (u32, u32)) -> bool {
+    let mut parts = rest.split('-');
+    let Some(major) = parts.next().and_then(|value| value.parse::<u32>().ok()) else {
+        return false;
+    };
+    let minor = parts
+        .next()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(0);
+    (major, minor) >= min_rev
+}
+
+/// How the CLI tells an adaptive-only model to think.
+///
+/// - pi (`models.json`): `compat.forceAdaptiveThinking: true` makes the
+///   anthropic-messages adapter send `thinking.type: "adaptive"` instead of
+///   the classic `thinking: {type: "enabled", budget_tokens}` block.
+/// - omp (`models.yml`): `thinking.mode: "anthropic-adaptive"`.
+pub(super) fn adaptive_only_thinking(model_id: &str) -> Option<&'static str> {
+    is_anthropic_adaptive_only(model_id).then_some("anthropic-adaptive")
+}
 // ─── Pi (`~/.pi/agent/models.json`) ─────────────────────────────────────────
 
 fn pi_config_path(app: &tauri::AppHandle) -> AppResult<PathBuf> {
@@ -187,7 +237,7 @@ fn pi_config_path(app: &tauri::AppHandle) -> AppResult<PathBuf> {
 }
 
 fn pi_model_entry(model_id: &str, context_window: i64, tpl: &ProviderTemplate) -> Value {
-    json!({
+    let mut entry = json!({
         "id": model_id,
         "name": model_id,
         "reasoning": true,
@@ -201,7 +251,11 @@ fn pi_model_entry(model_id: &str, context_window: i64, tpl: &ProviderTemplate) -
         },
         // Match the per-CLI api shape.
         "api": tpl.pi_api,
-    })
+    });
+    if is_anthropic_adaptive_only(model_id) {
+        entry["compat"] = json!({ "forceAdaptiveThinking": true });
+    }
+    entry
 }
 
 fn export_to_pi(
@@ -430,7 +484,11 @@ fn omp_model_override(model: &ExportModel) -> serde_yaml::Value {
     let mut thinking = serde_yaml::Mapping::new();
     thinking.insert(
         serde_yaml::Value::String("mode".to_string()),
-        serde_yaml::Value::String("effort".to_string()),
+        serde_yaml::Value::String(if is_anthropic_adaptive_only(&model.model_id) {
+            "anthropic-adaptive".to_string()
+        } else {
+            "effort".to_string()
+        }),
     );
     thinking.insert(
         serde_yaml::Value::String("efforts".to_string()),
@@ -866,6 +924,54 @@ mod tests {
         assert_eq!(entry["api"], "anthropic-messages");
         assert_eq!(entry["contextWindow"], 250_000);
         assert_eq!(entry["id"], "claude-sonnet-5");
+    }
+
+    #[test]
+    fn pi_model_entry_flags_adaptive_only_models() {
+        let tpl = template_for("claude").unwrap();
+        for model_id in [
+            "claude-opus-5-5",
+            "claude-sonnet-4-6",
+            "claude-haiku-5-5",
+            "fable-5",
+        ] {
+            let entry = pi_model_entry(model_id, 1_000_000, tpl);
+            assert_eq!(
+                entry["compat"]["forceAdaptiveThinking"], true,
+                "{model_id} should set compat.forceAdaptiveThinking"
+            );
+        }
+        for model_id in ["claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-1"] {
+            let entry = pi_model_entry(model_id, 1_000_000, tpl);
+            assert!(
+                entry.get("compat").is_none(),
+                "{model_id} must not set compat.forceAdaptiveThinking"
+            );
+        }
+    }
+
+    #[test]
+    fn omp_model_override_uses_anthropic_adaptive_mode_for_adaptive_models() {
+        let adaptive = ExportModel {
+            model_id: "claude-opus-5-5".to_string(),
+            context_window: 1_000_000,
+            reasoning_effort: "high".to_string(),
+        };
+        let classic = ExportModel {
+            model_id: "claude-sonnet-4-5".to_string(),
+            context_window: 1_000_000,
+            reasoning_effort: "high".to_string(),
+        };
+        let adaptive_yaml = omp_model_override(&adaptive);
+        assert_eq!(
+            adaptive_yaml["thinking"]["mode"],
+            serde_yaml::Value::String("anthropic-adaptive".to_string())
+        );
+        let classic_yaml = omp_model_override(&classic);
+        assert_eq!(
+            classic_yaml["thinking"]["mode"],
+            serde_yaml::Value::String("effort".to_string())
+        );
     }
 
     #[test]
