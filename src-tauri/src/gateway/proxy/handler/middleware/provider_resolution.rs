@@ -167,12 +167,18 @@ impl ProviderResolutionMiddleware {
         }
 
         // --- session bound provider ---
+        let strategy = ctx
+            .runtime_settings
+            .as_ref()
+            .map(|rs| rs.provider_selection_strategy)
+            .unwrap_or_default();
         let binding_outcome = resolve_session_bound_provider_id(
             ctx.state.session.as_ref(),
             &ctx.cli_key,
             ctx.session_id.as_deref(),
             ctx.created_at,
             ctx.allow_session_reuse,
+            strategy,
             ctx.forced_provider_id,
             &mut ctx.providers,
             selection.bound_provider_order.as_deref(),

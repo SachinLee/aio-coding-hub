@@ -45,7 +45,7 @@ pub(super) const SCHEMA_VERSION_ADD_GROK_PROXY_PREFERENCES: u32 = 35;
 pub(super) const SCHEMA_VERSION_ADD_IMAGE_GEN_STORAGE_DIR: u32 = 36;
 pub(super) const SCHEMA_VERSION_ALIGN_CCH_GATEWAY_RECTIFIERS: u32 = 37;
 pub(super) const SCHEMA_VERSION_ADD_CODEX_RESPONSES_WEBSOCKET: u32 = 38;
-
+pub(super) const SCHEMA_VERSION_ADD_PROVIDER_SELECTION_STRATEGY: u32 = 39;
 pub(super) const DEFAULT_LOG_RETENTION_DAYS: u32 = 7;
 pub(super) const MAX_LOG_RETENTION_DAYS: u32 = 3650;
 // Request-log DB retention: 0 = keep forever. Deliberately NOT sharing

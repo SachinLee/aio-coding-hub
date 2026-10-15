@@ -329,6 +329,49 @@ function GatewayRectifierSettingsSection({
   );
 }
 
+function ProviderSelectionStrategySection({
+  disabled,
+  settings,
+  onPersistSettings,
+}: {
+  disabled: boolean;
+  settings: AppSettings;
+  onPersistSettings: (
+    patch: Partial<AppSettings> & { upstream_proxy_password?: SensitiveStringUpdate }
+  ) => Promise<AppSettings | null>;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-white dark:bg-secondary p-5">
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+        <Shield className="h-4 w-4 text-muted-foreground" />
+        供应商选择策略
+      </h3>
+      <div className="divide-y divide-border">
+        <SettingsRow
+          label="候选供应商顺序"
+          subtitle="顺序优先：每次请求从候选列表最前面选（额度恢复后回到 A、切换模型后从 A 开始）。会话优先：沿用上次成功的供应商（旧行为）。不影响额度、熔断和 Codex 上下文约束。"
+        >
+          <Select
+            value={settings.provider_selection_strategy}
+            onChange={(event) =>
+              void onPersistSettings({
+                provider_selection_strategy: event.currentTarget
+                  .value as AppSettings["provider_selection_strategy"],
+              })
+            }
+            disabled={disabled}
+            className="w-40"
+            aria-label="供应商选择策略"
+          >
+            <option value="ordered">顺序优先</option>
+            <option value="session_preferred">会话优先</option>
+          </Select>
+        </SettingsRow>
+      </div>
+    </div>
+  );
+}
+
 function NotificationSettingsSection({
   taskCompleteNotifyEnabled,
   taskNotifyDisabled,
@@ -795,6 +838,13 @@ export function CliManagerGeneralTab({
               onPersistCodexSessionIdCompletion={onPersistCodexSessionIdCompletion}
             />
 
+            {appSettings ? (
+              <ProviderSelectionStrategySection
+                disabled={commonSettingsDisabled}
+                settings={appSettings}
+                onPersistSettings={onPersistCommonSettings}
+              />
+            ) : null}
             <NotificationSettingsSection
               taskCompleteNotifyEnabled={taskCompleteNotifyEnabled}
               taskNotifyDisabled={taskNotifyDisabled}

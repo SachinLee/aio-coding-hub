@@ -343,6 +343,7 @@ fn resolve_session_bound_provider_id_skips_disabled_bound_provider() {
         Some("sess_1"),
         now,
         true,
+        crate::settings::ProviderSelectionStrategy::SessionPreferred,
         None,
         &mut enabled,
         Some(&order),
@@ -382,6 +383,7 @@ fn resolve_session_bound_provider_id_skips_insertion_when_forced_provider_presen
         Some("sess_1"),
         now,
         true,
+        crate::settings::ProviderSelectionStrategy::SessionPreferred,
         Some(id2),
         &mut enabled,
         Some(&order),
@@ -420,6 +422,7 @@ fn resolve_session_bound_provider_id_does_not_insert_when_reuse_disabled() {
         Some("sess_1"),
         now,
         false,
+        crate::settings::ProviderSelectionStrategy::SessionPreferred,
         None,
         &mut enabled,
         Some(&order),
@@ -458,6 +461,7 @@ fn resolve_session_bound_provider_id_clears_stale_binding_when_bound_provider_no
         Some("sess_1"),
         now,
         true,
+        crate::settings::ProviderSelectionStrategy::SessionPreferred,
         None,
         &mut candidates,
         Some(&order),
@@ -496,6 +500,7 @@ fn default_mode_switches_to_enabled_provider_after_bound_provider_disabled_and_c
         Some("sess_1"),
         now,
         true,
+        crate::settings::ProviderSelectionStrategy::SessionPreferred,
         None,
         &mut enabled,
         Some(&[p1.id, p2.id]),
@@ -533,6 +538,7 @@ fn sort_mode_preserves_bound_candidate_for_shared_health_gate() {
         Some("sess_1"),
         now,
         true,
+        crate::settings::ProviderSelectionStrategy::SessionPreferred,
         None,
         &mut enabled,
         Some(&[p1.id, p2.id]),
@@ -575,6 +581,7 @@ fn session_bound_candidates_are_preserved_when_circuit_is_open() {
         Some("sess_1"),
         now,
         true,
+        crate::settings::ProviderSelectionStrategy::SessionPreferred,
         None,
         &mut enabled,
         Some(&[id1, id2]),
@@ -584,4 +591,125 @@ fn session_bound_candidates_are_preserved_when_circuit_is_open() {
     assert!(matches!(outcome, SessionBoundResult::Preferred(id) if id == id1));
     assert_eq!(ids(&enabled), vec![id1, id2]);
     assert!(!circuit.should_allow(id1, now).allow);
+}
+
+#[test]
+fn resolve_session_bound_provider_id_ordered_keeps_base_order() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("test.db");
+    let db = crate::db::init_for_tests(&db_path).expect("init db");
+
+    let p1 = insert_provider(&db, "P1", true);
+    let p2 = insert_provider(&db, "P2", true);
+    let id1 = p1.id;
+    let id2 = p2.id;
+
+    let session = session_manager::SessionManager::new();
+    let now = 1000;
+    // Previous request succeeded on p2 (the later candidate).
+    session.bind_success("claude", "sess_1", id2, None, now);
+
+    let mut enabled =
+        providers::list_enabled_for_gateway_in_mode(&db, "claude", None).expect("list enabled");
+    assert_eq!(ids(&enabled), vec![id1, id2]);
+
+    let order = vec![id1, id2];
+    let outcome = resolve_session_bound_provider_id(
+        &session,
+        "claude",
+        Some("sess_1"),
+        now,
+        true,
+        crate::settings::ProviderSelectionStrategy::Ordered,
+        None,
+        &mut enabled,
+        Some(&order),
+        None,
+    );
+
+    // `ordered` must not rotate toward the bound provider: candidates stay in
+    // base order and no preference is applied for this request.
+    assert!(matches!(outcome, SessionBoundResult::NoPreference));
+    assert_eq!(ids(&enabled), vec![id1, id2]);
+}
+
+#[test]
+fn resolve_session_bound_provider_id_ordered_after_model_switch_starts_from_head() {
+    // Scenario: A supports deepseek, B supports GPT, C supports both.
+    // Previous GPT request bound to B; now switching to deepseek, B is filtered
+    // out before resolution, so candidates are [A, C]. `ordered` must keep
+    // [A, C] instead of starting from C (the stale-bound successor).
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("test.db");
+    let db = crate::db::init_for_tests(&db_path).expect("init db");
+
+    let pa = insert_provider(&db, "PA", true);
+    let pc = insert_provider(&db, "PC", true);
+    let id_a = pa.id;
+    let id_c = pc.id;
+
+    let session = session_manager::SessionManager::new();
+    let now = 1000;
+    session.bind_success("claude", "sess_1", id_c, None, now);
+
+    let mut candidates = vec![
+        gateway_provider(id_a, None, providers::ProviderModelPolicyStatus::Legacy),
+        gateway_provider(id_c, None, providers::ProviderModelPolicyStatus::Legacy),
+    ];
+    let order = vec![id_a, id_c];
+
+    let outcome = resolve_session_bound_provider_id(
+        &session,
+        "claude",
+        Some("sess_1"),
+        now,
+        true,
+        crate::settings::ProviderSelectionStrategy::Ordered,
+        None,
+        &mut candidates,
+        Some(&order),
+        None,
+    );
+
+    assert!(matches!(outcome, SessionBoundResult::NoPreference));
+    assert_eq!(ids(&candidates), vec![id_a, id_c]);
+}
+
+#[test]
+fn resolve_session_bound_provider_id_session_preferred_rotates_to_bound() {
+    // Same setup as the ordered test, but with the legacy strategy: the bound
+    // provider must be rotated to the front.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("test.db");
+    let db = crate::db::init_for_tests(&db_path).expect("init db");
+
+    let p1 = insert_provider(&db, "P1", true);
+    let p2 = insert_provider(&db, "P2", true);
+    let id1 = p1.id;
+    let id2 = p2.id;
+
+    let session = session_manager::SessionManager::new();
+    let now = 1000;
+    session.bind_success("claude", "sess_1", id2, None, now);
+
+    let mut enabled =
+        providers::list_enabled_for_gateway_in_mode(&db, "claude", None).expect("list enabled");
+    assert_eq!(ids(&enabled), vec![id1, id2]);
+
+    let order = vec![id1, id2];
+    let outcome = resolve_session_bound_provider_id(
+        &session,
+        "claude",
+        Some("sess_1"),
+        now,
+        true,
+        crate::settings::ProviderSelectionStrategy::SessionPreferred,
+        None,
+        &mut enabled,
+        Some(&order),
+        None,
+    );
+
+    assert!(matches!(outcome, SessionBoundResult::Preferred(id) if id == id2));
+    assert_eq!(ids(&enabled), vec![id2, id1]);
 }

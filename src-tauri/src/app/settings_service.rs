@@ -63,6 +63,7 @@ pub(crate) struct SettingsUpdate {
     pub enable_gemini_function_id_rectifier: Option<bool>,
     pub enable_response_input_rectifier: Option<bool>,
     pub codex_priority_billing_source: Option<settings::CodexPriorityBillingSource>,
+    pub provider_selection_strategy: Option<settings::ProviderSelectionStrategy>,
     pub enable_billing_header_rectifier: Option<bool>,
     pub enable_claude_metadata_user_id_injection: Option<bool>,
     pub enable_cache_anomaly_monitor: Option<bool>,
@@ -178,6 +179,7 @@ pub(crate) struct SettingsView {
     pub enable_gemini_function_id_rectifier: bool,
     pub enable_response_input_rectifier: bool,
     pub codex_priority_billing_source: settings::CodexPriorityBillingSource,
+    pub provider_selection_strategy: settings::ProviderSelectionStrategy,
     pub enable_billing_header_rectifier: bool,
     pub enable_codex_session_id_completion: bool,
     pub enable_claude_metadata_user_id_injection: bool,
@@ -321,6 +323,7 @@ impl From<&settings::AppSettings> for SettingsView {
             enable_gemini_function_id_rectifier: value.enable_gemini_function_id_rectifier,
             enable_response_input_rectifier: value.enable_response_input_rectifier,
             codex_priority_billing_source: value.codex_priority_billing_source,
+            provider_selection_strategy: value.provider_selection_strategy,
             enable_billing_header_rectifier: value.enable_billing_header_rectifier,
             enable_codex_session_id_completion: value.enable_codex_session_id_completion,
             enable_claude_metadata_user_id_injection: value
@@ -656,6 +659,7 @@ where
         enable_gemini_function_id_rectifier,
         enable_response_input_rectifier,
         codex_priority_billing_source,
+        provider_selection_strategy,
         enable_billing_header_rectifier,
         enable_claude_metadata_user_id_injection,
         enable_cache_anomaly_monitor,
@@ -829,6 +833,8 @@ where
                 .unwrap_or(previous.enable_response_input_rectifier);
             let codex_priority_billing_source = codex_priority_billing_source
                 .unwrap_or(previous.codex_priority_billing_source);
+            let provider_selection_strategy = provider_selection_strategy
+                .unwrap_or(previous.provider_selection_strategy);
             let enable_billing_header_rectifier =
                 enable_billing_header_rectifier.unwrap_or(previous.enable_billing_header_rectifier);
             let enable_claude_metadata_user_id_injection = enable_claude_metadata_user_id_injection
@@ -906,6 +912,7 @@ where
                 enable_gemini_function_id_rectifier,
                 enable_response_input_rectifier,
                 codex_priority_billing_source,
+                provider_selection_strategy,
                 enable_billing_header_rectifier,
                 enable_codex_session_id_completion: previous.enable_codex_session_id_completion,
                 enable_claude_metadata_user_id_injection,

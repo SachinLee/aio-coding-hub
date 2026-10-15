@@ -1,0 +1,33 @@
+schema: spec-driven
+
+context: |
+  Language: Chinese
+  所有人工阅读的变更产物使用中文；保留 OpenSpec 解析必需的结构标题、SHALL/MUST、代码标识、路径和命令。
+  项目是 aio-coding-hub：React/TypeScript 前端与 Rust/Tauri 网关，包管理器为 pnpm。
+  新任务状态只记录在 openspec/changes/<change-id>/；.workflow 与 .trellis 仅作为只读历史输入。
+  创建或复用变更需要用户确认；方案批准、实现许可、验收和归档分别记录。
+  任务状态在 tasks.md 中记录；文件存在或 CLI planning_complete 不代表方案已获批准。
+  不安装每轮上下文注入器；只在阶段边界读取所选变更。
+  复用仓库现有设置、路由、恢复和测试机制；供应商排序不得绕过模型过滤、额度、冷却、熔断或 Codex 上下文归属。
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

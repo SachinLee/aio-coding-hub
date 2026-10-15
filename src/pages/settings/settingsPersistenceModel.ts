@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   HomeUsagePeriod,
+  ProviderSelectionStrategy,
   SettingsSetInput,
   SettingsViewBackedInputKey,
 } from "../../services/settings/settings";
@@ -40,6 +41,7 @@ export type PersistedSettings = {
   failover_max_providers_to_try: number;
   circuit_breaker_failure_threshold: number;
   circuit_breaker_open_duration_minutes: number;
+  provider_selection_strategy: ProviderSelectionStrategy;
 };
 
 export type PersistKey = keyof PersistedSettings;
@@ -72,6 +74,7 @@ export const DEFAULT_PERSISTED_SETTINGS: PersistedSettings = {
   failover_max_providers_to_try: 5,
   circuit_breaker_failure_threshold: 5,
   circuit_breaker_open_duration_minutes: 30,
+  provider_selection_strategy: "session_preferred",
 };
 
 const MAX_FAILOVER_ATTEMPTS_PER_PROVIDER = 20;
@@ -105,6 +108,7 @@ const PERSISTED_SETTINGS_INPUT_KEYS = [
   "failoverMaxProvidersToTry",
   "circuitBreakerFailureThreshold",
   "circuitBreakerOpenDurationMinutes",
+  "providerSelectionStrategy",
 ] as const satisfies readonly SettingsViewBackedInputKey[];
 
 function persistedSettingValuesEqual(
@@ -209,6 +213,8 @@ export function buildPersistedSettingsSnapshot(
     circuit_breaker_open_duration_minutes:
       settingsValue.circuit_breaker_open_duration_minutes ??
       fallback.circuit_breaker_open_duration_minutes,
+    provider_selection_strategy:
+      settingsValue.provider_selection_strategy ?? fallback.provider_selection_strategy,
   };
 }
 

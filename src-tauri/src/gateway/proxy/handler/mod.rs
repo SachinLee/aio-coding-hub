@@ -1086,6 +1086,7 @@ mod tests {
 
         let selected = super::provider_selection::apply_session_reuse_provider_binding(
             false,
+            crate::settings::ProviderSelectionStrategy::SessionPreferred,
             &mut providers,
             Some(22),
             Some(&[11, 22, 33]),
@@ -1101,6 +1102,7 @@ mod tests {
 
         let selected = super::provider_selection::apply_session_reuse_provider_binding(
             true,
+            crate::settings::ProviderSelectionStrategy::SessionPreferred,
             &mut providers,
             Some(22),
             Some(&[11, 22, 33]),
@@ -1116,6 +1118,7 @@ mod tests {
 
         let selected = super::provider_selection::apply_session_reuse_provider_binding(
             true,
+            crate::settings::ProviderSelectionStrategy::SessionPreferred,
             &mut providers,
             Some(99),
             Some(&[99, 30, 20]),
@@ -1124,7 +1127,22 @@ mod tests {
         assert_eq!(selected, None);
         assert_eq!(provider_ids(&providers), vec![30, 10, 20]);
     }
+    #[test]
+    fn apply_session_reuse_binding_ordered_keeps_base_order() {
+        let mut providers = vec![provider(11), provider(22), provider(33)];
 
+        let selected = super::provider_selection::apply_session_reuse_provider_binding(
+            true,
+            crate::settings::ProviderSelectionStrategy::Ordered,
+            &mut providers,
+            Some(22),
+            Some(&[11, 22, 33]),
+        );
+
+        // `ordered` must not rotate toward the bound provider.
+        assert_eq!(selected, None);
+        assert_eq!(provider_ids(&providers), vec![11, 22, 33]);
+    }
     #[test]
     fn warmup_intercept_special_settings_json_has_expected_shape() {
         let encoded = warmup_intercept_special_settings_json();

@@ -1093,6 +1093,19 @@ export const commands = {
       else return { status: "error", error: e as any };
     }
   },
+  async modelCatalogSetRouteEnabled(
+    input: ModelCatalogSetRouteEnabledInput
+  ): Promise<Result<ModelCatalogRouteState, string>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("model_catalog_set_route_enabled", { input }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
   async modelCatalogRefreshPreview(
     cliKey: string
   ): Promise<Result<ModelCatalogRefreshPreview, string>> {
@@ -3384,8 +3397,29 @@ export type ModelCatalogRoute = {
   upstreamModelId: string;
   snapshotStatus: string;
   isMapping: boolean;
+  /**
+   * False when the user disabled this (model, provider) route. Missing
+   * override rows count as enabled.
+   */
+  routeEnabled: boolean;
+};
+/**
+ * Whether a (model, provider) route is explicitly disabled. Returned so the
+ * catalog page can render per-route switches without a separate load.
+ */
+export type ModelCatalogRouteState = {
+  cliKey: string;
+  modelId: string;
+  providerId: number;
+  enabled: boolean;
 };
 export type ModelCatalogSetEnabledInput = { cliKey: string; modelId: string; enabled: boolean };
+export type ModelCatalogSetRouteEnabledInput = {
+  cliKey: string;
+  modelId: string;
+  providerId: number;
+  enabled: boolean;
+};
 export type ModelCatalogUpdateInput = {
   cliKey: string;
   modelId: string;
@@ -3966,6 +4000,14 @@ export type ProviderOAuthStatusResult = {
   has_refresh_token: boolean | null;
 };
 export type ProviderRouteRow = { provider_id: number };
+/**
+ * Strategy for ordering gateway provider candidates for a request.
+ *
+ * - `ordered`: always start from the base candidate order (first eligible provider wins).
+ * - `session_preferred`: rotate candidates so the session's last successful provider
+ * is tried first (legacy behavior).
+ */
+export type ProviderSelectionStrategy = "ordered" | "session_preferred";
 export type ProviderSummary = {
   id: number;
   cli_key: string;
@@ -4189,6 +4231,7 @@ export type SettingsUpdate = {
   enableGeminiFunctionIdRectifier: boolean | null;
   enableResponseInputRectifier: boolean | null;
   codexPriorityBillingSource: CodexPriorityBillingSource | null;
+  providerSelectionStrategy: ProviderSelectionStrategy | null;
   enableBillingHeaderRectifier: boolean | null;
   enableClaudeMetadataUserIdInjection: boolean | null;
   enableCacheAnomalyMonitor: boolean | null;
@@ -4272,6 +4315,7 @@ export type SettingsView = {
   enable_gemini_function_id_rectifier: boolean;
   enable_response_input_rectifier: boolean;
   codex_priority_billing_source: CodexPriorityBillingSource;
+  provider_selection_strategy: ProviderSelectionStrategy;
   enable_billing_header_rectifier: boolean;
   enable_codex_session_id_completion: boolean;
   enable_claude_metadata_user_id_injection: boolean;

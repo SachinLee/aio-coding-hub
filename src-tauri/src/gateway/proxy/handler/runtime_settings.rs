@@ -16,6 +16,7 @@ pub(super) struct HandlerRuntimeSettings {
     pub(super) enable_gemini_function_id_rectifier: bool,
     pub(super) enable_response_input_rectifier: bool,
     pub(super) codex_priority_billing_source: settings::CodexPriorityBillingSource,
+    pub(super) provider_selection_strategy: settings::ProviderSelectionStrategy,
     pub(super) enable_billing_header_rectifier: bool,
     pub(super) cx2cc_settings: crate::gateway::proxy::cx2cc::settings::Cx2ccSettings,
     pub(super) enable_response_fixer: bool,
@@ -63,6 +64,9 @@ pub(super) fn handler_runtime_settings(
         .unwrap_or(true);
     let codex_priority_billing_source = settings_cfg
         .map(|cfg| cfg.codex_priority_billing_source)
+        .unwrap_or_default();
+    let provider_selection_strategy = settings_cfg
+        .map(|cfg| cfg.provider_selection_strategy)
         .unwrap_or_default();
     let enable_billing_header_rectifier = settings_cfg
         .map(|cfg| cfg.enable_billing_header_rectifier)
@@ -116,6 +120,7 @@ pub(super) fn handler_runtime_settings(
         enable_response_input_rectifier,
         codex_priority_billing_source,
         enable_billing_header_rectifier,
+        provider_selection_strategy,
         cx2cc_settings,
         enable_response_fixer,
         response_fixer_stream_config: response_fixer::ResponseFixerConfig {

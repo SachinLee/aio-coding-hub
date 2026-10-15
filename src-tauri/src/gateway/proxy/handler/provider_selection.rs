@@ -193,6 +193,7 @@ pub(super) fn resolve_session_routing_decision(
 
 pub(super) fn apply_session_reuse_provider_binding(
     allow_session_reuse: bool,
+    strategy: crate::settings::ProviderSelectionStrategy,
     providers: &mut [providers::ProviderForGateway],
     bound_provider_id: Option<i64>,
     bound_provider_order: Option<&[i64]>,
@@ -202,11 +203,19 @@ pub(super) fn apply_session_reuse_provider_binding(
     }
     let bound_provider_id = bound_provider_id?;
 
-    provider_order::apply_session_provider_preference(
-        providers,
-        bound_provider_id,
-        bound_provider_order,
-    )
+    match strategy {
+        // `ordered`: keep the base candidate order; do not rotate toward the
+        // session's last successful provider.
+        crate::settings::ProviderSelectionStrategy::Ordered => None,
+        // `session_preferred`: legacy behavior — rotate so the bound provider is first.
+        crate::settings::ProviderSelectionStrategy::SessionPreferred => {
+            provider_order::apply_session_provider_preference(
+                providers,
+                bound_provider_id,
+                bound_provider_order,
+            )
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -216,6 +225,7 @@ pub(super) fn resolve_session_bound_provider_id(
     session_id: Option<&str>,
     created_at: i64,
     allow_session_reuse: bool,
+    strategy: crate::settings::ProviderSelectionStrategy,
     forced_provider_id: Option<i64>,
     providers: &mut [providers::ProviderForGateway],
     bound_provider_order: Option<&[i64]>,
@@ -237,6 +247,7 @@ pub(super) fn resolve_session_bound_provider_id(
 
     match apply_session_reuse_provider_binding(
         allow_session_reuse,
+        strategy,
         providers,
         bound_provider_id,
         bound_provider_order,

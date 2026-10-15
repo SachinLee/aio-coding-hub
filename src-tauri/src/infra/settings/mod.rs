@@ -20,5 +20,5 @@ pub use persistence::{
 };
 pub use types::{
     AppSettings, CodexHomeMode, CodexPriorityBillingSource, GatewayListenMode, HomeUsagePeriod,
-    WslHostAddressMode, WslTargetCli,
+    ProviderSelectionStrategy, WslHostAddressMode, WslTargetCli,
 };

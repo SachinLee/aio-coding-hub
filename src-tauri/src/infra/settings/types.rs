@@ -64,6 +64,28 @@ impl CodexPriorityBillingSource {
     }
 }
 
+/// Strategy for ordering gateway provider candidates for a request.
+///
+/// - `ordered`: always start from the base candidate order (first eligible provider wins).
+/// - `session_preferred`: rotate candidates so the session's last successful provider
+///   is tried first (legacy behavior).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderSelectionStrategy {
+    Ordered,
+    #[default]
+    SessionPreferred,
+}
+
+impl ProviderSelectionStrategy {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ordered => "ordered",
+            Self::SessionPreferred => "session_preferred",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
 #[serde(default)]
 pub struct WslTargetCli {
@@ -148,6 +170,7 @@ pub struct AppSettings {
     pub enable_gemini_function_id_rectifier: bool,
     pub enable_response_input_rectifier: bool,
     pub codex_priority_billing_source: CodexPriorityBillingSource,
+    pub provider_selection_strategy: ProviderSelectionStrategy,
     // Billing header rectifier: strip x-anthropic-billing-header from system prompt (default enabled).
     pub enable_billing_header_rectifier: bool,
     // Codex Session ID completion (default enabled).
@@ -237,6 +260,7 @@ impl Default for AppSettings {
             enable_gemini_function_id_rectifier: DEFAULT_ENABLE_GEMINI_FUNCTION_ID_RECTIFIER,
             enable_response_input_rectifier: DEFAULT_ENABLE_RESPONSE_INPUT_RECTIFIER,
             codex_priority_billing_source: CodexPriorityBillingSource::default(),
+            provider_selection_strategy: ProviderSelectionStrategy::default(),
             enable_billing_header_rectifier: DEFAULT_ENABLE_BILLING_HEADER_RECTIFIER,
             enable_codex_session_id_completion: DEFAULT_ENABLE_CODEX_SESSION_ID_COMPLETION,
             enable_claude_metadata_user_id_injection:

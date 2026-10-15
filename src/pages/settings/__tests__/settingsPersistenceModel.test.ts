@@ -171,6 +171,7 @@ describe("pages/settings/settingsPersistenceModel", () => {
       failoverMaxProvidersToTry: 5,
       circuitBreakerFailureThreshold: 5,
       circuitBreakerOpenDurationMinutes: 30,
+      providerSelectionStrategy: "session_preferred",
     });
   });
 });

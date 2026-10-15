@@ -704,9 +704,20 @@ fn migrate_add_codex_responses_websocket(
     )
 }
 
+fn migrate_add_provider_selection_strategy(
+    settings: &mut AppSettings,
+    schema_version_present: bool,
+) -> bool {
+    migrate_bump_schema_version(
+        settings,
+        schema_version_present,
+        SCHEMA_VERSION_ADD_PROVIDER_SELECTION_STRATEGY,
+    )
+}
+
 type SettingsMigration = fn(&mut AppSettings, bool) -> bool;
 
-const SETTINGS_MIGRATIONS: [SettingsMigration; 32] = [
+const SETTINGS_MIGRATIONS: [SettingsMigration; 33] = [
     migrate_disable_upstream_timeouts,
     migrate_add_gateway_rectifiers,
     migrate_add_circuit_breaker_notice,
@@ -739,6 +750,7 @@ const SETTINGS_MIGRATIONS: [SettingsMigration; 32] = [
     migrate_add_image_gen_storage_dir,
     migrate_align_cch_gateway_rectifiers,
     migrate_add_codex_responses_websocket,
+    migrate_add_provider_selection_strategy,
 ];
 
 fn apply_settings_migrations(settings: &mut AppSettings, schema_version_present: bool) -> bool {

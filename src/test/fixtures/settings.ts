@@ -47,6 +47,7 @@ export function createTestAppSettings(overrides?: Partial<AppSettings>): AppSett
     enable_gemini_function_id_rectifier: true,
     enable_response_input_rectifier: true,
     codex_priority_billing_source: "requested",
+    provider_selection_strategy: "session_preferred",
     enable_billing_header_rectifier: true,
     enable_codex_session_id_completion: true,
     enable_claude_metadata_user_id_injection: true,
