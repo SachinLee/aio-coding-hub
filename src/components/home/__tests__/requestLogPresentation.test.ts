@@ -167,6 +167,45 @@ describe("components/home/requestLogPresentation", () => {
     });
   });
 
+  it("labels a full-input recovery request without claiming its retry succeeded", () => {
+    const recovery = {
+      cli_key: "codex",
+      path: "/v1/responses",
+      status: 400,
+      error_code: GatewayErrorCodes.REQUEST_REJECTED,
+      special_settings_json: JSON.stringify([
+        {
+          type: "codex_responses_transport",
+          transport_action: "full_input_retry",
+          providerId: 7,
+          failure_class: "context",
+          reason_code: "previous_response_not_found",
+        },
+      ]),
+    };
+    const meta = buildRequestLogAuditMeta(recovery);
+    expect(meta.tags.map((tag) => tag.label)).toContain("请求完整重发");
+    expect(meta.summary).toContain("恢复结果请查看后续请求");
+    expect(meta.providerFallbackText).toBeNull();
+    expect(
+      computeStatusBadge({ status: recovery.status, errorCode: recovery.error_code })
+    ).toMatchObject({ text: "400 失败", isError: true });
+
+    for (const overrides of [
+      { status: 200, error_code: null },
+      { special_settings_json: null },
+      {
+        special_settings_json: JSON.stringify([
+          { type: "codex_responses_transport", transport_action: "full_input_retry" },
+        ]),
+      },
+      { error_code: GatewayErrorCodes.UPSTREAM_4XX },
+      { cli_key: "claude" },
+    ]) {
+      expect(buildRequestLogAuditMeta({ ...recovery, ...overrides }).tags).toEqual([]);
+    }
+  });
+
   it("covers malformed special settings and trace ordering edge cases", () => {
     expect(resolveClaudeModelMappingFromSpecialSettings(null)).toBeNull();
     expect(resolveClaudeModelMappingFromSpecialSettings("123")).toBeNull();

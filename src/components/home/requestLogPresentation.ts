@@ -90,6 +90,16 @@ export function buildRequestLogAuditMeta(log: RequestLogAuditInput): RequestLogA
     (!!(log.error_code && CLIENT_ABORT_ERROR_CODES.has(log.error_code)) ||
       settingTypes.has("client_abort"));
   const isAllProvidersUnavailable = log.error_code === GatewayErrorCodes.ALL_PROVIDERS_UNAVAILABLE;
+  const isContextRecovery =
+    log.cli_key === "codex" &&
+    log.status === 400 &&
+    log.error_code === GatewayErrorCodes.REQUEST_REJECTED &&
+    settings.some(
+      (setting) =>
+        setting.type === "codex_responses_transport" &&
+        setting.transport_action === "full_input_retry" &&
+        setting.reason_code === "previous_response_not_found"
+    );
   const excludedFromStats = !!log.excluded_from_stats;
 
   const tags: RequestLogAuditTag[] = [];
@@ -144,6 +154,16 @@ export function buildRequestLogAuditMeta(log: RequestLogAuditInput): RequestLogA
     );
   }
 
+  if (isContextRecovery) {
+    tags.push(
+      auditTag(
+        "请求完整重发",
+        "bg-secondary/90 text-muted-foreground ring-1 ring-inset ring-border",
+        "网关已要求客户端重发完整输入，恢复结果请查看后续请求。"
+      )
+    );
+  }
+
   let summary: string | null = null;
   if (isWarmupIntercept) {
     summary = "Warmup 命中后由网关直接应答，仅保留审计记录，不进入统计。";
@@ -153,6 +173,8 @@ export function buildRequestLogAuditMeta(log: RequestLogAuditInput): RequestLogA
     summary = "当前没有可用 Provider，网关未继续向已熔断或冷却中的供应商发起上游请求。";
   } else if (isClientAbort) {
     summary = "客户端中途中断了请求，系统保留这条审计记录但不计入统计。";
+  } else if (isContextRecovery) {
+    summary = "网关已要求客户端重发完整输入；本条保留 400，恢复结果请查看后续请求。";
   } else if (excludedFromStats) {
     summary = "这条记录仅用于审计可见性，不参与统计聚合。";
   }

@@ -69,7 +69,9 @@ pub(super) enum AttemptSendOutcome {
     Response(reqwest::Response, AttemptTiming),
     StreamResponse(crate::gateway::streams::UpstreamResponse, AttemptTiming),
     WsTransport(&'static str, AttemptTiming),
-    ContextLost(AttemptTiming),
+    ContextLost {
+        require_http: bool,
+    },
     LocalProtocol(&'static str, AttemptTiming),
     Timeout(AttemptTiming),
     ReqwestError(reqwest::Error, AttemptTiming),
@@ -338,7 +340,9 @@ where
             SendOutcome::Transport(reason) => {
                 return AttemptSendOutcome::WsTransport(reason, timing)
             }
-            SendOutcome::ContextLost => return AttemptSendOutcome::ContextLost(timing),
+            SendOutcome::ContextLost { require_http } => {
+                return AttemptSendOutcome::ContextLost { require_http }
+            }
             SendOutcome::Local(reason) => return AttemptSendOutcome::LocalProtocol(reason, timing),
             SendOutcome::Http(reason) => {
                 super::ws_attempt::marker(
