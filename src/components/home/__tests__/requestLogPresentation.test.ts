@@ -187,9 +187,22 @@ describe("components/home/requestLogPresentation", () => {
     expect(meta.tags.map((tag) => tag.label)).toContain("请求完整重发");
     expect(meta.summary).toContain("恢复结果请查看后续请求");
     expect(meta.providerFallbackText).toBeNull();
-    expect(
-      computeStatusBadge({ status: recovery.status, errorCode: recovery.error_code })
-    ).toMatchObject({ text: "400 失败", isError: true });
+    const badge = computeStatusBadge({
+      cliKey: recovery.cli_key,
+      status: recovery.status,
+      errorCode: recovery.error_code,
+      specialSettingsJson: recovery.special_settings_json,
+    });
+    expect(badge).toMatchObject({
+      text: "400 请求完整重发",
+      semanticText: "请求完整重发",
+      isError: false,
+      isFullInputRetry: true,
+    });
+    expect(badge.tone).toContain("text-muted-foreground");
+    expect(badge.title).toContain("支持自动恢复的客户端会重发完整输入");
+    expect(badge.title).not.toContain("请求拒绝");
+    expect(badge.title).not.toContain("成功");
 
     for (const overrides of [
       { status: 200, error_code: null },
@@ -202,9 +215,61 @@ describe("components/home/requestLogPresentation", () => {
       { error_code: GatewayErrorCodes.UPSTREAM_4XX },
       { cli_key: "claude" },
     ]) {
-      expect(buildRequestLogAuditMeta({ ...recovery, ...overrides }).tags).toEqual([]);
+      const log = { ...recovery, ...overrides };
+      expect(buildRequestLogAuditMeta(log).tags).toEqual([]);
+      expect(
+        computeStatusBadge({
+          cliKey: log.cli_key,
+          status: log.status,
+          errorCode: log.error_code,
+          specialSettingsJson: log.special_settings_json,
+        }).isFullInputRetry
+      ).not.toBe(true);
     }
   });
+
+  it.each([
+    {
+      cliKey: "codex",
+      status: 400,
+      errorCode: GatewayErrorCodes.REQUEST_REJECTED,
+      errorCategory: "context",
+      expected: true,
+    },
+    {
+      cliKey: "codex",
+      status: 400,
+      errorCode: GatewayErrorCodes.REQUEST_REJECTED,
+      errorCategory: "local",
+      expected: false,
+    },
+    {
+      cliKey: "codex",
+      status: 400,
+      errorCode: GatewayErrorCodes.UPSTREAM_4XX,
+      errorCategory: "context",
+      expected: false,
+    },
+    {
+      cliKey: "claude",
+      status: 400,
+      errorCode: GatewayErrorCodes.REQUEST_REJECTED,
+      errorCategory: "context",
+      expected: false,
+    },
+    {
+      cliKey: "codex",
+      status: 500,
+      errorCode: GatewayErrorCodes.REQUEST_REJECTED,
+      errorCategory: "context",
+      expected: false,
+    },
+  ])(
+    "classifies realtime recovery evidence strictly ($cliKey/$status/$errorCode/$errorCategory)",
+    ({ expected, ...input }) => {
+      expect(computeStatusBadge(input).isFullInputRetry === true).toBe(expected);
+    }
+  );
 
   it("covers malformed special settings and trace ordering edge cases", () => {
     expect(resolveClaudeModelMappingFromSpecialSettings(null)).toBeNull();

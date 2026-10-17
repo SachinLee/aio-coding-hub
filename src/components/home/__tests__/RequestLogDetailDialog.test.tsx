@@ -563,9 +563,15 @@ describe("home/RequestLogDetailDialog", () => {
         final_provider_id: 0,
         final_provider_name: "Unknown",
         attempts_json: "[]",
+        error_details_json: JSON.stringify({
+          error_category: "context",
+          reason_code: "previous_response_not_found",
+          reason: "Response context is unavailable; resend the full input",
+        }),
         special_settings_json: JSON.stringify([
           {
             type: "codex_responses_transport",
+            scope: "attempt",
             client_transport: "responses_ws",
             upstream_transport: "responses_ws",
             transport_action: "full_input_retry",
@@ -578,9 +584,21 @@ describe("home/RequestLogDetailDialog", () => {
     });
     render(<RequestLogDetailDialog selectedLogId={1} onSelectLogId={vi.fn()} />);
     expect(screen.getByText("请求完整重发")).toBeInTheDocument();
-    expect(screen.getByText(/恢复结果请查看后续请求/)).toBeInTheDocument();
-    expect(screen.getByText("400 失败")).toBeInTheDocument();
+    expect(screen.getByText("请求完整重发 (GW_REQUEST_REJECTED)")).toHaveClass("bg-secondary");
+    expect(
+      screen.getByText("支持自动恢复的客户端会重发完整输入；恢复结果请查看后续请求。")
+    ).toBeInTheDocument();
+    expect(screen.getByText("400 请求完整重发")).toHaveClass("text-muted-foreground");
+    expect(screen.queryByText("请求拒绝 (GW_REQUEST_REJECTED)")).not.toBeInTheDocument();
+    expect(screen.queryByText("请求或上下文恢复校验未通过")).not.toBeInTheDocument();
+    expect(screen.queryByText(/必要时开始新的轮次/)).not.toBeInTheDocument();
+    expect(screen.queryByText("400 失败")).not.toBeInTheDocument();
     expect(screen.queryByText(/恢复成功/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "详细信息" }));
+    expect(
+      screen.getByText("Response context is unavailable; resend the full input")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("上游状态码:")).not.toBeInTheDocument();
     switchToTab("决策链");
     expect(screen.getByText("供应商：#7")).toBeInTheDocument();
     expect(screen.getByText("无故障切换尝试。")).toBeInTheDocument();

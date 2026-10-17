@@ -186,14 +186,21 @@ describe("components/home/HomeRequestLogsPanel", () => {
     );
     expect(screen.getByText("请求完整重发")).toBeInTheDocument();
     expect(screen.getByText(/恢复结果请查看后续请求/)).toBeInTheDocument();
-    expect(screen.getByText("400 失败")).toBeInTheDocument();
+    const status = screen.getByText("400 请求完整重发").parentElement;
+    expect(status).toHaveClass("text-muted-foreground");
+    expect(status?.querySelector("svg.lucide-refresh-cw")).toBeInTheDocument();
+    expect(status?.querySelector("svg.lucide-check-circle-2")).not.toBeInTheDocument();
+    expect(screen.queryByText("请求拒绝")).not.toBeInTheDocument();
+    expect(screen.queryByText("400 失败")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: "最近使用记录简洁模式" }));
     expect(screen.getByText("请求完整重发")).toBeInTheDocument();
     expect(screen.getByText("请求完整重发")).toHaveAttribute(
       "title",
       expect.stringContaining("恢复结果请查看后续请求")
     );
-    expect(screen.getByText("400 失败")).toBeInTheDocument();
+    expect(screen.getByText("400 请求完整重发")).toBeInTheDocument();
+    expect(screen.queryByText("请求拒绝")).not.toBeInTheDocument();
+    expect(screen.queryByText("400 失败")).not.toBeInTheDocument();
     expect(screen.queryByText(/恢复成功/)).not.toBeInTheDocument();
   });
 
