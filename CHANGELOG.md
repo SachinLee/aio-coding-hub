@@ -6,6 +6,17 @@
 
 * **model-catalog:** OpenCode 模型同步支持读取含注释和尾随逗号的 JSONC 配置，保留无关配置值与连接设置；模型变化时仍写出严格 JSON（不保留注释），无变化时不重写文件，解析失败不覆盖原配置。
 
+## [0.60.23](https://github.com/dyndynjyxa/aio-coding-hub/compare/aio-coding-hub-v0.60.22...aio-coding-hub-v0.60.23) (2026-10-17)
+
+
+### Bug Fixes
+
+* **deps:** remove vulnerable ZIP extraction dependency ([194015a](https://github.com/dyndynjyxa/aio-coding-hub/commit/194015acc6595ad7ae554698f93dc5b8c181c064))
+* **deps:** update quinn-proto and rustls security patches ([07a4f7e](https://github.com/dyndynjyxa/aio-coding-hub/commit/07a4f7eb9f5cd9c6eef4696e7e5f3106389704ab))
+* **gateway:** correct Codex WS recovery and log hints ([eb25bf9](https://github.com/dyndynjyxa/aio-coding-hub/commit/eb25bf99e4ff7f317812963be161b1355d290db6))
+* **gateway:** reuse Codex WS idle timeout and lift 4 MiB upload cap ([6f1fcc4](https://github.com/dyndynjyxa/aio-coding-hub/commit/6f1fcc405e4f0535216aacc66600fa811b5359b5))
+* **logs:** distinguish Codex full-input recovery from failures ([a4118b2](https://github.com/dyndynjyxa/aio-coding-hub/commit/a4118b2b6bc2a3a2d718b7d410ad5d5850df697d))
+
 ## [0.60.22](https://github.com/dyndynjyxa/aio-coding-hub/compare/aio-coding-hub-v0.60.21...aio-coding-hub-v0.60.22) (2026-10-12)
 
 
