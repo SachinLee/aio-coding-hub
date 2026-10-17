@@ -2205,7 +2205,15 @@ async fn recv_until(
     socket: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     expected: &str,
 ) -> Value {
-    tokio::time::timeout(Duration::from_secs(3), async {
+    recv_until_with_timeout(socket, expected, Duration::from_secs(3)).await
+}
+
+async fn recv_until_with_timeout(
+    socket: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    expected: &str,
+    timeout: Duration,
+) -> Value {
+    tokio::time::timeout(timeout, async {
         while let Some(message) = socket.next().await {
             match message.unwrap() {
                 Message::Text(text) => {
@@ -2222,7 +2230,7 @@ async fn recv_until(
         panic!("EOF before {expected}")
     })
     .await
-    .expect("expected downstream event")
+    .unwrap_or_else(|_| panic!("expected downstream event {expected} within {timeout:?}"))
 }
 
 #[tokio::test(flavor = "current_thread")]

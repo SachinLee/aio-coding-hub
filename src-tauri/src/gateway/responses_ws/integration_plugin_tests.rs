@@ -357,7 +357,10 @@ async fn large_uploads_pass_through_ws_http_and_managed_recovery_with_plugins() 
         } else {
             let mut socket = connect(&gateway, "large-upload").await.unwrap();
             socket.send(Message::Text(body.to_string())).await.unwrap();
-            let completed = recv_until(&mut socket, "response.completed").await;
+            // Debug CI builds parse and rewrite 9 MiB through both request hooks.
+            let completed =
+                recv_until_with_timeout(&mut socket, "response.completed", Duration::from_secs(30))
+                    .await;
             assert_eq!(completed["response"]["id"], "resp-large");
             let _ = socket.close(None).await;
         }
