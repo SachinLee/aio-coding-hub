@@ -1,0 +1,3 @@
+schema: spec-driven
+created: 2026-10-16
+goal: 账号后端清理 input 项不支持的 status，保留正文、工具关联和缓存键
