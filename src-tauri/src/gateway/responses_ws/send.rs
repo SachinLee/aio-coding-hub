@@ -110,6 +110,7 @@ pub(in crate::gateway) async fn send(
         let valid =
             previous.and_then(|id| connection.continuation_provider_id(id)) == Some(provider_id);
         if !valid || !allow_ws || reusable.is_none() {
+            let continuation = connection.continuation.lock_or_recover();
             return SendOutcome::ContextLost {
                 require_http: !allow_ws
                     || continuation.as_ref().is_some_and(|current| {
